@@ -21,6 +21,7 @@ void* LoadFile(CHAR16* filename, UINTN* _sz) {
     EFI_LOADED_IMAGE* loaded;
     EFI_STATUS r;
     void* data = NULL;
+    UINTN pages = 0;
 
     r = OpenProtocol(gImg, &LoadedImageProtocol, (void**)&loaded);
     if (r) {
@@ -64,7 +65,8 @@ void* LoadFile(CHAR16* filename, UINTN* _sz) {
         goto exit3;
     }
 
-    r = gBS->AllocatePool(EfiLoaderData, finfo->FileSize, (void**)&data);
+    pages = (finfo->FileSize + 4095) / 4096;
+    r = gBS->AllocatePages(AllocateAnyPages, EfiLoaderData, pages, (EFI_PHYSICAL_ADDRESS *)&data);
     if (r) {
         printf("LoadFile: Cannot allocate buffer (%s)\n", efi_strerror(r));
         data = NULL;
