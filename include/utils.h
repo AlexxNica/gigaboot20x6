@@ -20,6 +20,7 @@ void WaitAnyKey(void);
 void Fatal(const char* msg, EFI_STATUS status);
 CHAR16* HandleToString(EFI_HANDLE handle);
 const char *efi_strerror(EFI_STATUS status);
+const CHAR16 *efi_wstrerror(EFI_STATUS status);
 
 // Convenience wrappers for Open/Close protocol for use by
 // UEFI app code that's not a driver model participant

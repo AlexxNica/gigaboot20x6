@@ -18,39 +18,45 @@
 #include <utils.h>
 #include <printf.h>
 
-const static char *efi_error_labels[] = {
-    "EFI_SUCCESS",
-    "EFI_LOAD_ERROR",
-    "EFI_INVALID_PARAMETER",
-    "EFI_UNSUPPORTED",
-    "EFI_BAD_BUFFER_SIZE",
-    "EFI_BUFFER_TOO_SMALL",
-    "EFI_NOT_READY",
-    "EFI_DEVICE_ERROR",
-    "EFI_WRITE_PROTECTED",
-    "EFI_OUT_OF_RESOURCES",
-    "EFI_VOLUME_CORRUPTED",
-    "EFI_VOLUME_FULL",
-    "EFI_NO_MEDIA",
-    "EFI_MEDIA_CHANGED",
-    "EFI_NOT_FOUND",
-    "EFI_ACCESS_DENIED",
-    "EFI_NO_RESPONSE",
-    "EFI_NO_MAPPING",
-    "EFI_TIMEOUT",
-    "EFI_NOT_STARTED",
-    "EFI_ALREADY_STARTED",
-    "EFI_ABORTED",
-    "EFI_ICMP_ERROR",
-    "EFI_TFTP_ERROR",
-    "EFI_PROTOCOL_ERROR",
-    "EFI_INCOMPATIBLE_VERSION",
-    "EFI_SECURITY_VIOLATION",
-    "EFI_CRC_ERROR",
-    "EFI_END_OF_MEDIA",
-    "EFI_END_OF_FILE",
-    "EFI_INVALID_LANGUAGE",
-    "EFI_COMPROMISED_DATA",
+#define ERR_ENTRY(x) { #x, L"" #x }
+typedef struct {
+    const char *str;
+    const CHAR16 *w_str;
+} err_entry_t;
+
+err_entry_t efi_error_labels[] = {
+    ERR_ENTRY(EFI_SUCCESS),
+    ERR_ENTRY(EFI_LOAD_ERROR),
+    ERR_ENTRY(EFI_INVALID_PARAMETER),
+    ERR_ENTRY(EFI_UNSUPPORTED),
+    ERR_ENTRY(EFI_BAD_BUFFER_SIZE),
+    ERR_ENTRY(EFI_BUFFER_TOO_SMALL),
+    ERR_ENTRY(EFI_NOT_READY),
+    ERR_ENTRY(EFI_DEVICE_ERROR),
+    ERR_ENTRY(EFI_WRITE_PROTECTED),
+    ERR_ENTRY(EFI_OUT_OF_RESOURCES),
+    ERR_ENTRY(EFI_VOLUME_CORRUPTED),
+    ERR_ENTRY(EFI_VOLUME_FULL),
+    ERR_ENTRY(EFI_NO_MEDIA),
+    ERR_ENTRY(EFI_MEDIA_CHANGED),
+    ERR_ENTRY(EFI_NOT_FOUND),
+    ERR_ENTRY(EFI_ACCESS_DENIED),
+    ERR_ENTRY(EFI_NO_RESPONSE),
+    ERR_ENTRY(EFI_NO_MAPPING),
+    ERR_ENTRY(EFI_TIMEOUT),
+    ERR_ENTRY(EFI_NOT_STARTED),
+    ERR_ENTRY(EFI_ALREADY_STARTED),
+    ERR_ENTRY(EFI_ABORTED),
+    ERR_ENTRY(EFI_ICMP_ERROR),
+    ERR_ENTRY(EFI_TFTP_ERROR),
+    ERR_ENTRY(EFI_PROTOCOL_ERROR),
+    ERR_ENTRY(EFI_INCOMPATIBLE_VERSION),
+    ERR_ENTRY(EFI_SECURITY_VIOLATION),
+    ERR_ENTRY(EFI_CRC_ERROR),
+    ERR_ENTRY(EFI_END_OF_MEDIA),
+    ERR_ENTRY(EFI_END_OF_FILE),
+    ERR_ENTRY(EFI_INVALID_LANGUAGE),
+    ERR_ENTRY(EFI_COMPROMISED_DATA),
 };
 
 // Useful GUID Constants Not Defined by -lefi
@@ -107,8 +113,18 @@ const char *efi_strerror(EFI_STATUS status)
 {
     size_t i = (~EFI_ERROR_MASK & status);
     if (i < sizeof(efi_error_labels)/sizeof(efi_error_labels[0])) {
-        return efi_error_labels[i];
+        return efi_error_labels[i].str;
     }
 
     return "<Unknown error>";
+}
+
+const CHAR16 *efi_wstrerror(EFI_STATUS status)
+{
+    size_t i = (~EFI_ERROR_MASK & status);
+    if (i < sizeof(efi_error_labels)/sizeof(efi_error_labels[0])) {
+        return efi_error_labels[i].w_str;
+    }
+
+    return L"<Unknown error>";
 }
