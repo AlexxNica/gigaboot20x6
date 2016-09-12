@@ -27,6 +27,15 @@
 #define E820_NVS 4
 #define E820_UNUSABLE 5
 
+static EFI_GUID GraphicsOutputProtocol = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+static EFI_GUID AcpiTableGUID = ACPI_TABLE_GUID;
+static EFI_GUID Acpi2TableGUID = ACPI_20_TABLE_GUID;
+
+static UINT8 ACPI_RSD_PTR[8] = "RSD PTR ";
+
+extern EFI_STATUS EFIAPI ax88772_init ( IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE * pSystemTable);
+
+
 const char* e820name[] = {
     "IGNORE",
     "RAM",
@@ -276,34 +285,6 @@ fail:
     return -1;
 }
 
-static EFI_GUID GraphicsOutputProtocol = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
-
-void dump_graphics_modes(EFI_GRAPHICS_OUTPUT_PROTOCOL* gop) {
-    EFI_GRAPHICS_OUTPUT_MODE_INFORMATION* info;
-    UINTN sz;
-    UINT32 num;
-    for (num = 0; num < gop->Mode->MaxMode; num++) {
-        if (gop->QueryMode(gop, num, &sz, &info)) {
-            continue;
-        }
-        printf("Mode %d  %d x %d (stride %d) fmt %d\n",
-               num, info->HorizontalResolution, info->VerticalResolution,
-               info->PixelsPerScanLine, info->PixelFormat);
-        if (info->PixelFormat == PixelBitMask) {
-            printf("Mode %d R:%08x G:%08x B:%08x X:%08x\n", num,
-                   info->PixelInformation.RedMask,
-                   info->PixelInformation.GreenMask,
-                   info->PixelInformation.BlueMask,
-                   info->PixelInformation.ReservedMask);
-        }
-    }
-}
-
-static EFI_GUID AcpiTableGUID = ACPI_TABLE_GUID;
-static EFI_GUID Acpi2TableGUID = ACPI_20_TABLE_GUID;
-
-static UINT8 ACPI_RSD_PTR[8] = "RSD PTR ";
-
 uint32_t find_acpi_root(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     EFI_CONFIGURATION_TABLE* cfgtab = sys->ConfigurationTable;
     int i;
@@ -421,12 +402,12 @@ int try_local_boot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     void* kernel;
     void* ramdisk;
     void* cmdline;
-    
+
     if ((kernel = LoadFile(L"magenta.bin", &ksz)) == NULL) {
         printf("Failed to load 'magenta.bin' from boot media\n\n");
         return 0;
     }
-    
+
     ramdisk = LoadFile(L"ramdisk.bin", &rsz);
     cmdline = LoadFile(L"cmdline", &csz);
 
@@ -434,20 +415,42 @@ int try_local_boot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     return -1;
 }
 
+void draw_logo(void) {
+    if (!gop) return;
+
+    const uint32_t h_res = gop->Mode->Info->HorizontalResolution;
+    const uint32_t v_res = gop->Mode->Info->VerticalResolution;
+    EFI_GRAPHICS_OUTPUT_BLT_PIXEL fuchsia = {
+        .Red = 0xFF,
+        .Green = 0x0,
+        .Blue = 0xFF,
+    };
+    EFI_GRAPHICS_OUTPUT_BLT_PIXEL black = {
+        .Red = 0x0,
+        .Green = 0x0,
+        .Blue = 0x0
+    };
+
+    // Blank the screen, removing vendor UEFI logos
+    gop->Blt(gop, &black, EfiBltVideoFill, 0, 0, 0, 0, h_res, v_res, 0);
+    // Draw the Fuchsia square in the top right corner
+    gop->Blt(gop, &fuchsia, EfiBltVideoFill, 0, 0, 0, 0, h_res, v_res/100, 0);
+    gop->Blt(gop, &fuchsia, EfiBltVideoFill, 0, 0, 0, v_res - (v_res/100), h_res, v_res/100, 0);
+}
+
+
 EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     EFI_BOOT_SERVICES* bs = sys->BootServices;
     EFI_PHYSICAL_ADDRESS mem;
 
     InitializeLib(img, sys);
     InitGoodies(img, sys);
+    bs->LocateProtocol(&GraphicsOutputProtocol, NULL, (void**)&gop);
+    draw_logo();
 
     printf("\nOSBOOT v0.2\n\n");
-
-    bs->LocateProtocol(&GraphicsOutputProtocol, NULL, (void**)&gop);
     printf("Framebuffer base is at %lx\n\n", gop->Mode->FrameBufferBase);
 
-    extern EFI_STATUS EFIAPI ax88772_init ( IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE * pSystemTable);
-    ax88772_init(img, sys);
     if (try_local_boot(img, sys) < 0) {
         goto fail;
     }
@@ -472,6 +475,7 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     nbcmdline.size = sizeof(cmdline);
     cmdline[0] = 0;
 
+    ax88772_init(gImg, gSys);
     if (netboot_init()) {
         printf("Failed to initialize NetBoot\n");
         goto fail;
