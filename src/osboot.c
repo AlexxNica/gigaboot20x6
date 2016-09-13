@@ -442,6 +442,7 @@ void draw_logo(void) {
 EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     EFI_BOOT_SERVICES* bs = sys->BootServices;
     EFI_PHYSICAL_ADDRESS mem;
+    EFI_TPL prev_tpl = TPL_APPLICATION;
 
     InitializeLib(img, sys);
     InitGoodies(img, sys);
@@ -480,7 +481,9 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
         printf("Failed to initialize NetBoot\n");
         goto fail;
     }
+
     printf("\nNetBoot Server Started...\n\n");
+    prev_tpl = bs->RaiseTPL(TPL_NOTIFY);
     for (;;) {
         int n = netboot_poll();
         if (n < 1) {
@@ -512,6 +515,9 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
 
         // make sure network traffic is not in flight, etc
         netboot_close();
+
+        // Restore the TPL before booting the kernel, or failing to netboot
+        bs->RestoreTPL(prev_tpl);
 
         // maybe it's a kernel image?
         boot_kernel(img, sys, (void*) nbkernel.data, nbkernel.offset,
