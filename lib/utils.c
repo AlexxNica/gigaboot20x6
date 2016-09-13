@@ -128,3 +128,13 @@ const CHAR16 *efi_wstrerror(EFI_STATUS status)
 
     return L"<Unknown error>";
 }
+
+size_t strlen_16(CHAR16 *str)
+{
+    size_t len = 0;
+    while (*(str + len) != '\0') {
+        len++;
+    }
+
+    return len;
+}
