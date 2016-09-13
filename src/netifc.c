@@ -166,24 +166,27 @@ EFI_SIMPLE_NETWORK *netifc_find_available(void) {
         }
 
         Print(L"%s: ", paths[i]);
-        ret = bs->OpenProtocol(handles[i], &SimpleNetworkProtocol, (void**)&cur_snp, gImg, NULL,
-                EFI_OPEN_PROTOCOL_EXCLUSIVE);
+        ret = bs->HandleProtocol(handles[i], &SimpleNetworkProtocol, (void**)&cur_snp);
         if (ret) {
             printf("Failed to open (%s)\n", efi_strerror(ret));
             continue;
         }
 
+        /* If a driver is provided by the firmware then it should be started already, but check
+         * to make sure. This also covers the case where we're providing the AX88772 driver in-line
+         * during this boot itself */
         ret = cur_snp->Start(cur_snp);
-        if (EFI_ERROR(ret)) {
+        if (EFI_ERROR(ret) && ret != EFI_ALREADY_STARTED) {
             printf("Failed to start (%s)", efi_strerror(ret));
             goto link_fail;
         }
 
-        /* Additional buffer allocations shouldn't be needed */
-        ret = cur_snp->Initialize(cur_snp, 0, 0);
-        if (EFI_ERROR(ret)) {
-            printf("Failed to initialize (%s)\n", efi_strerror(ret));
-            goto link_fail;
+        if (ret != EFI_ALREADY_STARTED) {
+            ret = cur_snp->Initialize(cur_snp, 0, 0);
+            if (EFI_ERROR(ret)) {
+                printf("Failed to initialize (%s)\n", efi_strerror(ret));
+                goto link_fail;
+            }
         }
 
         /* Prod the driver to cache its current status. We don't need the status or buffer,
