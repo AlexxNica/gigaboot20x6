@@ -132,30 +132,41 @@ EFI_SIMPLE_NETWORK *netifc_find_available(void) {
     EFI_BOOT_SERVICES* bs = gSys->BootServices;
     EFI_STATUS ret;
     EFI_SIMPLE_NETWORK *cur_snp = NULL;
-    EFI_HANDLE h[32];
+    EFI_HANDLE handles[32];
+    CHAR16 *paths[32];
     size_t nic_cnt = 0;
-    size_t sz = sizeof(h);
+    size_t sz = sizeof(handles);
+    uint32_t last_parent = 0;
     uint32_t int_sts;
     void *tx_buf;
 
     /* Get the handles of all devices that provide SimpleNetworkProtocol interfaces */
-    ret = bs->LocateHandle(ByProtocol, &SimpleNetworkProtocol, NULL, &sz, h);
+    ret = bs->LocateHandle(ByProtocol, &SimpleNetworkProtocol, NULL, &sz, handles);
     if (ret != EFI_SUCCESS) {
         printf("Failed to locate network interfaces (%s)\n", efi_strerror(ret));
         return NULL;
     }
 
     nic_cnt = sz / sizeof(EFI_HANDLE);
-    printf("Found %zu network interface%c\n", nic_cnt, (nic_cnt == 1) ? ' ' : 's');
     for (size_t i = 0; i < nic_cnt; i++) {
-        CHAR16 *path = HandleToString(h[i]);
-        Print(L"%u: %s\n", i, path);
+        paths[i] = HandleToString(handles[i]);
     }
 
     /* Iterate over our SNP list until we find one with an established link */
     for (size_t i = 0; i < nic_cnt; i++) {
-        printf("net%zu: ", i);
-        ret = bs->OpenProtocol(h[i], &SimpleNetworkProtocol, (void**)&cur_snp, gImg, NULL,
+         /* Check each interface once, but ignore any additional device paths a given interface
+          * may provide. e1000 tends to add a path for ipv4 and ipv6 configuration information
+          * for instance */
+        if (i != last_parent) {
+            if (memcmp(paths[i], paths[last_parent], strlen_16(paths[last_parent])) == 0) {
+                continue;
+            } else {
+                last_parent = i;
+            }
+        }
+
+        Print(L"%s: ", paths[i]);
+        ret = bs->OpenProtocol(handles[i], &SimpleNetworkProtocol, (void**)&cur_snp, gImg, NULL,
                 EFI_OPEN_PROTOCOL_EXCLUSIVE);
         if (ret) {
             printf("Failed to open (%s)\n", efi_strerror(ret));
@@ -193,7 +204,7 @@ EFI_SIMPLE_NETWORK *netifc_find_available(void) {
         return cur_snp;
 
 link_fail:
-        bs->CloseProtocol(h[i], &SimpleNetworkProtocol, gImg, NULL);
+        bs->CloseProtocol(handles[i], &SimpleNetworkProtocol, gImg, NULL);
         cur_snp = NULL;
     }
 
