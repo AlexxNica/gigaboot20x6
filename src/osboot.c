@@ -331,7 +331,7 @@ int boot_kernel(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys,
     ZP32(kernel.zeropage, ZP_FB_WIDTH) = (UINT32)gop->Mode->Info->HorizontalResolution;
     ZP32(kernel.zeropage, ZP_FB_HEIGHT) = (UINT32)gop->Mode->Info->VerticalResolution;
     ZP32(kernel.zeropage, ZP_FB_STRIDE) = (UINT32)gop->Mode->Info->PixelsPerScanLine;
-    ZP32(kernel.zeropage, ZP_FB_FORMAT) = 4; // XRGB32
+    ZP32(kernel.zeropage, ZP_FB_FORMAT) = 5; // XRGB32
     ZP32(kernel.zeropage, ZP_FB_REGBASE) = 0;
     ZP32(kernel.zeropage, ZP_FB_SIZE) = 256 * 1024 * 1024;
 
