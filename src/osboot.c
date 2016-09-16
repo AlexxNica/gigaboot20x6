@@ -384,22 +384,101 @@ nbfile* netboot_get_buffer(const char* name) {
 
 static char cmdline[4096];
 
-int try_local_boot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
-    UINTN ksz, rsz, csz;
-    void* kernel;
+enum {
+    BOOT_DEVICE_NONE,
+    BOOT_DEVICE_NETBOOT,
+    BOOT_DEVICE_LOCAL,
+};
+
+int boot_prompt(EFI_SYSTEM_TABLE* sys) {
+    EFI_BOOT_SERVICES* bs = sys->BootServices;
+
+    EFI_EVENT TimerEvent;
+    EFI_EVENT WaitList[2];
+
+    EFI_STATUS status;
+    UINTN Index;
+    EFI_INPUT_KEY key;
+    memset(&key, 0, sizeof(key));
+
+    status = bs->CreateEvent(EVT_TIMER, 0, NULL, NULL, &TimerEvent);
+    if (status != EFI_SUCCESS) {
+        printf("could not create event timer: %s\n", efi_strerror(status));
+        return BOOT_DEVICE_NONE;
+    }
+
+    status = bs->SetTimer(TimerEvent, TimerPeriodic, 10000000);
+    if (status != EFI_SUCCESS) {
+        printf("could not set timer: %s\n", efi_strerror(status));
+        return BOOT_DEVICE_NONE;
+    }
+
+    int wait_idx = 0;
+    int key_idx = wait_idx;
+    WaitList[wait_idx++] = sys->ConIn->WaitForKey;
+    int timer_idx = wait_idx;  // timer should always be last
+    WaitList[wait_idx++] = TimerEvent;
+
+    int timeout_s = 3;
+    printf("Press (n) for netboot or (m) to boot the magenta.bin on the device\n");
+    // TODO: better event loop
+    do {
+        status = bs->WaitForEvent(wait_idx, WaitList, &Index);
+
+        // Check the timer
+        if (!EFI_ERROR(status)) {
+            if (Index == timer_idx) {
+                printf(".");
+                timeout_s--;
+                continue;
+            } else if (Index == key_idx) {
+                status = sys->ConIn->ReadKeyStroke(sys->ConIn, &key);
+                if (EFI_ERROR(status)) {
+                    // clear the key and wait for another event
+                    memset(&key, 0, sizeof(key));
+                }
+            }
+        } else {
+            printf("Error waiting for event: %s\n", efi_strerror(status));
+            return BOOT_DEVICE_NONE;
+        }
+    } while ((key.UnicodeChar != 'n' && key.UnicodeChar != 'm') && timeout_s);
+    printf("\n");
+
+    bs->CloseEvent(TimerEvent);
+    if (timeout_s > 0 || status == EFI_SUCCESS) {
+        if (key.UnicodeChar == 'n') {
+            return BOOT_DEVICE_NETBOOT;
+        } else if (key.UnicodeChar == 'm') {
+            return BOOT_DEVICE_LOCAL;
+        }
+    }
+
+    // Default to netboot
+    printf("Time out! Trying netboot...\n");
+    return BOOT_DEVICE_NETBOOT;
+}
+
+int try_load_kernel(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys, void** kernel, UINTN* ksz) {
+    *kernel = LoadFile(L"magenta.bin", ksz);
+    return *kernel == NULL ? -1 : 0;
+}
+
+void try_local_boot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys, void* kernel, UINTN ksz) {
+    UINTN rsz, csz;
     void* ramdisk;
     void* cmdline;
 
-    if ((kernel = LoadFile(L"magenta.bin", &ksz)) == NULL) {
-        printf("Failed to load 'magenta.bin' from boot media\n\n");
-        return 0;
+    if (kernel == NULL) {
+        printf("Invalid 'magenta.bin' from boot media\n\n");
+        return;
     }
 
     ramdisk = LoadFile(L"ramdisk.bin", &rsz);
     cmdline = LoadFile(L"cmdline", &csz);
 
     boot_kernel(img, sys, kernel, ksz, ramdisk, rsz, cmdline, csz);
-    return -1;
+    return;
 }
 
 void draw_logo(void) {
@@ -425,28 +504,13 @@ void draw_logo(void) {
     gop->Blt(gop, &fuchsia, EfiBltVideoFill, 0, 0, 0, v_res - (v_res/100), h_res, v_res/100, 0);
 }
 
-
-EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
+void do_netboot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     EFI_BOOT_SERVICES* bs = sys->BootServices;
-    EFI_PHYSICAL_ADDRESS mem;
-    EFI_TPL prev_tpl = TPL_APPLICATION;
 
-    InitializeLib(img, sys);
-    InitGoodies(img, sys);
-    bs->LocateProtocol(&GraphicsOutputProtocol, NULL, (void**)&gop);
-    draw_logo();
-
-    printf("\nOSBOOT v0.2\n\n");
-    printf("Framebuffer base is at %lx\n\n", gop->Mode->FrameBufferBase);
-
-    if (try_local_boot(img, sys) < 0) {
-        goto fail;
-    }
-
-    mem = 0xFFFFFFFF;
+    EFI_PHYSICAL_ADDRESS mem = 0xFFFFFFFF;
     if (bs->AllocatePages(AllocateMaxAddress, EfiLoaderData, KBUFSIZE / 4096, &mem)) {
         printf("Failed to allocate network io buffer\n");
-        goto fail;
+        return;
     }
     nbkernel.data = (void*) mem;
     nbkernel.size = KBUFSIZE;
@@ -454,7 +518,7 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     mem = 0xFFFFFFFF;
     if (bs->AllocatePages(AllocateMaxAddress, EfiLoaderData, RBUFSIZE / 4096, &mem)) {
         printf("Failed to allocate network io buffer\n");
-        goto fail;
+        return;
     }
     nbramdisk.data = (void*) mem;
     nbramdisk.size = RBUFSIZE;
@@ -463,13 +527,8 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     nbcmdline.size = sizeof(cmdline);
     cmdline[0] = 0;
 
-    if (netboot_init()) {
-        printf("Failed to initialize NetBoot\n");
-        goto fail;
-    }
-
     printf("\nNetBoot Server Started...\n\n");
-    prev_tpl = bs->RaiseTPL(TPL_NOTIFY);
+    EFI_TPL prev_tpl = bs->RaiseTPL(TPL_NOTIFY);
     for (;;) {
         int n = netboot_poll();
         if (n < 1) {
@@ -484,14 +543,37 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
             UINTN exitdatasize;
             EFI_STATUS r;
             EFI_HANDLE h;
+
+            MEMMAP_DEVICE_PATH mempath[2] = {
+                {
+                    .Header = {
+                        .Type = HARDWARE_DEVICE_PATH,
+                        .SubType = HW_MEMMAP_DP,
+                        .Length = { (UINT8)(sizeof(MEMMAP_DEVICE_PATH) & 0xff),
+                            (UINT8)((sizeof(MEMMAP_DEVICE_PATH) >> 8) & 0xff), },
+                    },
+                    .MemoryType = EfiLoaderData,
+                    .StartingAddress = (EFI_PHYSICAL_ADDRESS)nbkernel.data,
+                    .EndingAddress = (EFI_PHYSICAL_ADDRESS)(nbkernel.data + nbkernel.offset),
+                },
+                {
+                    .Header = {
+                        .Type = END_DEVICE_PATH_TYPE,
+                        .SubType = END_ENTIRE_DEVICE_PATH_SUBTYPE,
+                        .Length = { (UINT8)(sizeof(EFI_DEVICE_PATH) & 0xff),
+                            (UINT8)((sizeof(EFI_DEVICE_PATH) >> 8) & 0xff), },
+                    },
+                },
+            };
+
             printf("Attempting to run EFI binary...\n");
-            r = bs->LoadImage(FALSE, img, NULL, (void*) nbkernel.data, nbkernel.offset, &h);
-            if (r != EFI_SUCCESS) {
+            r = bs->LoadImage(FALSE, img, (EFI_DEVICE_PATH*)mempath, (void*)nbkernel.data, nbkernel.offset, &h);
+            if (EFI_ERROR(r)) {
                 printf("LoadImage Failed (%s)\n", efi_strerror(r));
                 continue;
             }
             r = bs->StartImage(h, &exitdatasize, NULL);
-            if (r != EFI_SUCCESS) {
+            if (EFI_ERROR(r)) {
                 printf("StartImage Failed %ld\n", r);
                 continue;
             }
@@ -509,7 +591,54 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
         boot_kernel(img, sys, (void*) nbkernel.data, nbkernel.offset,
                     (void*) nbramdisk.data, nbramdisk.offset,
                     cmdline, sizeof(cmdline));
+        break;
+    }
+}
+
+EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
+    EFI_BOOT_SERVICES* bs = sys->BootServices;
+
+    InitializeLib(img, sys);
+    InitGoodies(img, sys);
+    bs->LocateProtocol(&GraphicsOutputProtocol, NULL, (void**)&gop);
+    draw_logo();
+
+    printf("\nOSBOOT v0.2\n\n");
+    printf("Framebuffer base is at %lx\n\n", gop->Mode->FrameBufferBase);
+
+    // See if there's a network interface
+    bool have_network = netboot_init() == 0;
+
+    // Look for a kernel image on disk
+    void* kernel = NULL;
+    UINTN ksz = 0;
+    try_load_kernel(img, sys, &kernel, &ksz);
+
+    if (!have_network && kernel == NULL) {
         goto fail;
+    }
+
+    int boot_device = BOOT_DEVICE_NONE;
+    if (have_network) {
+        boot_device = BOOT_DEVICE_NETBOOT;
+    }
+    if (kernel != NULL) {
+        if (boot_device != BOOT_DEVICE_NONE) {
+            boot_device = boot_prompt(sys);
+        } else {
+            boot_device = BOOT_DEVICE_LOCAL;
+        }
+    }
+
+    switch (boot_device) {
+        case BOOT_DEVICE_NETBOOT:
+            do_netboot(img, sys);
+            break;
+        case BOOT_DEVICE_LOCAL:
+            try_local_boot(img, sys, kernel, ksz);
+            break;
+        default:
+            goto fail;
     }
 
 fail:
