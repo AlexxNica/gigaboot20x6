@@ -43,11 +43,8 @@ $(call efi_app, fileio, src/fileio.c)
 OSBOOT_FILES := src/osboot.c \
 				src/netboot.c \
 				src/netifc.c \
-				src/inet6.c \
-				third_party/edk2/OptionRomPkg/Bus/Usb/UsbNetworking/Ax88772b/Ax88772.c \
-				third_party/edk2/OptionRomPkg/Bus/Usb/UsbNetworking/Ax88772b/ComponentName.c \
-				third_party/edk2/OptionRomPkg/Bus/Usb/UsbNetworking/Ax88772b/DriverBinding.c \
-				third_party/edk2/OptionRomPkg/Bus/Usb/UsbNetworking/Ax88772b/SimpleNetwork.c
+				src/inet6.c
+
 $(call efi_app, osboot, $(OSBOOT_FILES))
 $(call efi_app, usbtest, src/usbtest.c)
 

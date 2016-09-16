@@ -23,9 +23,6 @@ static EFI_GUID Acpi2TableGUID = ACPI_20_TABLE_GUID;
 
 static UINT8 ACPI_RSD_PTR[8] = "RSD PTR ";
 
-extern EFI_STATUS EFIAPI ax88772_init ( IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE * pSystemTable);
-
-
 const char* e820name[] = {
     "IGNORE",
     "RAM",
@@ -466,7 +463,6 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     nbcmdline.size = sizeof(cmdline);
     cmdline[0] = 0;
 
-    ax88772_init(gImg, gSys);
     if (netboot_init()) {
         printf("Failed to initialize NetBoot\n");
         goto fail;
