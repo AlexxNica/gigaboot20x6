@@ -4,8 +4,5 @@
 
 #pragma once
 
-#ifndef NULL
-#define NULL ((void*)0)
-#endif
-
-#include <printf.h>
+int isdigit(int c);
+int isspace(int c);

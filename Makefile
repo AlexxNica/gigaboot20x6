@@ -55,7 +55,13 @@ else
 	APP := out/osboot.efi
 endif
 
-LIB_SRCS := lib/utils.c lib/loadfile.c lib/console-printf.c lib/string.c
+LIB_SRCS := \
+    lib/utils.c \
+    lib/loadfile.c \
+    lib/console-printf.c \
+    lib/ctype.c \
+    lib/stdlib.c \
+    lib/string.c
 LIB_SRCS += third_party/lk/src/printf.c
 
 LIB_OBJS := $(patsubst %.c,out/%.o,$(LIB_SRCS))

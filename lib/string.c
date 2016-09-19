@@ -39,3 +39,9 @@ size_t strlen(const char* s) {
         len++;
     return len;
 }
+
+char* strchr(const char* s, int c) {
+    while (*s != c && *s++) ;
+    if (*s != c) return 0;
+    return (char*)s;
+}
