@@ -41,6 +41,7 @@ include build/build.mk
 $(call efi_app, showmem, src/showmem.c)
 $(call efi_app, fileio, src/fileio.c)
 OSBOOT_FILES := src/osboot.c \
+				src/cmdline.c \
 				src/magenta.c \
 				src/netboot.c \
 				src/netifc.c \

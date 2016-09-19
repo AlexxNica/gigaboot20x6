@@ -7,11 +7,14 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <cmdline.h>
 #include <magenta.h>
 #include <netboot.h>
 #include <utils.h>
 
 static EFI_GUID GraphicsOutputProtocol = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+
+#define DEFAULT_TIMEOUT 3
 
 #define KBUFSIZE (32*1024*1024)
 #define RBUFSIZE (256*1024*1024)
@@ -43,7 +46,7 @@ enum {
     BOOT_DEVICE_LOCAL,
 };
 
-int boot_prompt(EFI_SYSTEM_TABLE* sys) {
+int boot_prompt(EFI_SYSTEM_TABLE* sys, int timeout_s) {
     EFI_BOOT_SERVICES* bs = sys->BootServices;
 
     EFI_EVENT TimerEvent;
@@ -72,7 +75,6 @@ int boot_prompt(EFI_SYSTEM_TABLE* sys) {
     int timer_idx = wait_idx;  // timer should always be last
     WaitList[wait_idx++] = TimerEvent;
 
-    int timeout_s = 3;
     printf("Press (n) for netboot or (m) to boot the magenta.bin on the device\n");
     // TODO: better event loop
     do {
@@ -110,28 +112,6 @@ int boot_prompt(EFI_SYSTEM_TABLE* sys) {
     // Default to netboot
     printf("Time out! Trying netboot...\n");
     return BOOT_DEVICE_NETBOOT;
-}
-
-int try_load_kernel(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys, void** kernel, UINTN* ksz) {
-    *kernel = LoadFile(L"magenta.bin", ksz);
-    return *kernel == NULL ? -1 : 0;
-}
-
-void try_local_boot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys, void* kernel, UINTN ksz) {
-    UINTN rsz, csz;
-    void* ramdisk;
-    void* cmdline;
-
-    if (kernel == NULL) {
-        printf("Invalid 'magenta.bin' from boot media\n\n");
-        return;
-    }
-
-    ramdisk = LoadFile(L"ramdisk.bin", &rsz);
-    cmdline = LoadFile(L"cmdline", &csz);
-
-    boot_kernel(img, sys, kernel, ksz, ramdisk, rsz, cmdline, csz);
-    return;
 }
 
 void draw_logo(EFI_GRAPHICS_OUTPUT_PROTOCOL* gop) {
@@ -241,6 +221,7 @@ void do_netboot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
         bs->RestoreTPL(prev_tpl);
 
         // maybe it's a kernel image?
+        // TODO: process any bootloader.* cmdline args as needed before booting
         boot_kernel(img, sys, (void*) nbkernel.data, nbkernel.offset,
                     (void*) nbramdisk.data, nbramdisk.offset,
                     cmdline, sizeof(cmdline));
@@ -260,13 +241,21 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     printf("\nOSBOOT v0.2\n\n");
     printf("Framebuffer base is at %lx\n\n", gop->Mode->FrameBufferBase);
 
+    // Load the cmdline
+    UINTN csz = 0;
+    char* cmdline = LoadFile(L"cmdline", &csz);
+    if (cmdline) {
+        cmdline[csz] = '\0';
+        printf("cmdline: %s\n", cmdline);
+    }
+
     // See if there's a network interface
     bool have_network = netboot_init() == 0;
 
     // Look for a kernel image on disk
-    void* kernel = NULL;
+    // TODO: use the filesystem protocol
     UINTN ksz = 0;
-    try_load_kernel(img, sys, &kernel, &ksz);
+    void* kernel = LoadFile(L"magenta.bin", &ksz);
 
     if (!have_network && kernel == NULL) {
         goto fail;
@@ -278,7 +267,8 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     }
     if (kernel != NULL) {
         if (boot_device != BOOT_DEVICE_NONE) {
-            boot_device = boot_prompt(sys);
+            int timeout_s = cmdline_get_uint32(cmdline, "bootloader.timeout", DEFAULT_TIMEOUT);
+            boot_device = boot_prompt(sys, timeout_s);
         } else {
             boot_device = BOOT_DEVICE_LOCAL;
         }
@@ -288,9 +278,12 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
         case BOOT_DEVICE_NETBOOT:
             do_netboot(img, sys);
             break;
-        case BOOT_DEVICE_LOCAL:
-            try_local_boot(img, sys, kernel, ksz);
+        case BOOT_DEVICE_LOCAL: {
+            UINTN rsz = 0;
+            void* ramdisk = LoadFile(L"ramdisk.bin", &rsz);
+            boot_kernel(img, sys, kernel, ksz, ramdisk, rsz, cmdline, csz);
             break;
+        }
         default:
             goto fail;
     }
