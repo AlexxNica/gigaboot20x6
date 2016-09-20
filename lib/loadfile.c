@@ -67,13 +67,13 @@ void* LoadFile(CHAR16* filename, UINTN* _sz) {
     r = file->Read(file, &sz, data);
     if (r) {
         printf("LoadFile: Error reading file (%s)\n", efi_strerror(r));
-        gBS->FreePool(data);
+        gBS->FreePages((EFI_PHYSICAL_ADDRESS)data, pages);
         data = NULL;
         goto exit4;
     }
     if (sz != finfo->FileSize) {
         printf("LoadFile: Short read\n");
-        gBS->FreePool(data);
+        gBS->FreePages((EFI_PHYSICAL_ADDRESS)data, pages);
         data = NULL;
         goto exit4;
     }
