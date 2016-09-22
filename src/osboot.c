@@ -5,6 +5,7 @@
 #include <efi.h>
 #include <efilib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <cmdline.h>
@@ -114,6 +115,47 @@ int boot_prompt(EFI_SYSTEM_TABLE* sys, int timeout_s) {
     return BOOT_DEVICE_NETBOOT;
 }
 
+void set_graphics_mode(EFI_SYSTEM_TABLE* sys, EFI_GRAPHICS_OUTPUT_PROTOCOL* gop, char* cmdline) {
+    if (!gop || !cmdline) return;
+
+    char res[11];
+    if (cmdline_get(cmdline, "bootloader.fbres", res, sizeof(res)) < 0) return;
+
+    uint32_t hres = 0;
+    hres = atol(res);
+
+    char* x = strchr(res, 'x');
+    if (!x) return;
+    x++;
+
+    uint32_t vres = 0;
+    vres = atol(x);
+    if (!hres || !vres) return;
+
+    UINT32 max_mode = gop->Mode->MaxMode;
+
+    for (int i = 0; i < max_mode; i++) {
+        EFI_GRAPHICS_OUTPUT_MODE_INFORMATION* mode_info;
+        UINTN info_size = 0;
+        EFI_STATUS status = gop->QueryMode(gop, i, &info_size, &mode_info);
+        if (EFI_ERROR(status)) {
+            printf("Could not retrieve mode %d: %s\n", i, efi_strerror(status));
+            continue;
+        }
+
+        if (mode_info->HorizontalResolution == hres &&
+            mode_info->VerticalResolution == vres) {
+            gop->SetMode(gop, i);
+            sys->BootServices->Stall(1000);
+            sys->ConOut->ClearScreen(sys->ConOut);
+            return;
+        }
+    }
+    printf("Could not find framebuffer mode %ux%u; using default mode = %ux%u\n",
+            hres, vres, gop->Mode->Info->HorizontalResolution, gop->Mode->Info->VerticalResolution);
+    sys->BootServices->Stall(5000000);
+}
+
 void draw_logo(EFI_GRAPHICS_OUTPUT_PROTOCOL* gop) {
     if (!gop) return;
 
@@ -221,7 +263,10 @@ void do_netboot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
         bs->RestoreTPL(prev_tpl);
 
         // maybe it's a kernel image?
-        // TODO: process any bootloader.* cmdline args as needed before booting
+        EFI_GRAPHICS_OUTPUT_PROTOCOL* gop;
+        bs->LocateProtocol(&GraphicsOutputProtocol, NULL, (void**)&gop);
+        set_graphics_mode(sys, gop, cmdline);
+
         boot_kernel(img, sys, (void*) nbkernel.data, nbkernel.offset,
                     (void*) nbramdisk.data, nbramdisk.offset,
                     cmdline, sizeof(cmdline));
@@ -234,12 +279,6 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
 
     InitializeLib(img, sys);
     InitGoodies(img, sys);
-    EFI_GRAPHICS_OUTPUT_PROTOCOL* gop;
-    bs->LocateProtocol(&GraphicsOutputProtocol, NULL, (void**)&gop);
-    draw_logo(gop);
-
-    printf("\nOSBOOT v0.2\n\n");
-    printf("Framebuffer base is at %lx\n\n", gop->Mode->FrameBufferBase);
 
     // Load the cmdline
     UINTN csz = 0;
@@ -248,6 +287,14 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
         cmdline[csz] = '\0';
         printf("cmdline: %s\n", cmdline);
     }
+
+    EFI_GRAPHICS_OUTPUT_PROTOCOL* gop;
+    bs->LocateProtocol(&GraphicsOutputProtocol, NULL, (void**)&gop);
+    set_graphics_mode(sys, gop, cmdline);
+    draw_logo(gop);
+
+    printf("\nOSBOOT v0.2\n\n");
+    printf("Framebuffer base is at %lx\n\n", gop->Mode->FrameBufferBase);
 
     // See if there's a network interface
     bool have_network = netboot_init() == 0;
