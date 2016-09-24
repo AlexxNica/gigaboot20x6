@@ -284,7 +284,7 @@ fail:
 
 int boot_kernel(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys,
                 void* image, size_t sz, void* ramdisk, size_t rsz,
-                void* cmdline, size_t csz) {
+                void* cmdline, size_t csz, void* cmdline2, size_t csz2) {
     EFI_BOOT_SERVICES* bs = sys->BootServices;
     kernel_t kernel;
     EFI_STATUS r;
@@ -315,14 +315,24 @@ int boot_kernel(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys,
     ZP32(kernel.zeropage, ZP_FB_REGBASE) = 0;
     ZP32(kernel.zeropage, ZP_FB_SIZE) = 256 * 1024 * 1024;
 
+    if ((csz == 0) && (csz2 != 0)) {
+        cmdline = cmdline2;
+        csz = csz2;
+        csz2 = 0;
+    }
     if (cmdline) {
         // Truncate the cmdline to fit on a page
         if (csz >= 4095) {
             csz = 4095;
         }
         memcpy(kernel.cmdline, cmdline, csz);
+        if (cmdline2 && (csz2 < (4095 - csz))) {
+            memcpy(kernel.cmdline + csz, cmdline2, csz2);
+            csz += csz2;
+        }
         kernel.cmdline[csz] = '\0';
     }
+
     if (ramdisk && rsz) {
         ZP32(kernel.zeropage, ZP_RAMDISK_BASE) = (uint32_t) (uintptr_t) ramdisk;
         ZP32(kernel.zeropage, ZP_RAMDISK_SIZE) = rsz;

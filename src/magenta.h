@@ -13,4 +13,4 @@ typedef struct {
 
 int boot_kernel(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys,
                 void* image, size_t sz, void* ramdisk, size_t rsz,
-                void* cmdline, size_t csz);
+                void* cmdline, size_t csz, void* cmdline2, size_t csz2);

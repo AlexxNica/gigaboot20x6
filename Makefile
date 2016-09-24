@@ -45,7 +45,8 @@ OSBOOT_FILES := src/osboot.c \
 				src/magenta.c \
 				src/netboot.c \
 				src/netifc.c \
-				src/inet6.c
+				src/inet6.c \
+				src/pci.c
 
 $(call efi_app, osboot, $(OSBOOT_FILES))
 $(call efi_app, usbtest, src/usbtest.c)

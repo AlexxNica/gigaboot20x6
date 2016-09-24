@@ -20,6 +20,8 @@ static EFI_GUID GraphicsOutputProtocol = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
 #define KBUFSIZE (32*1024*1024)
 #define RBUFSIZE (256*1024*1024)
 
+static char cmdextra[256];
+
 static nbfile nbkernel;
 static nbfile nbramdisk;
 static nbfile nbcmdline;
@@ -199,7 +201,8 @@ void do_netboot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     nbramdisk.size = RBUFSIZE;
 
     nbcmdline.data = (void*) cmdline;
-    nbcmdline.size = sizeof(cmdline);
+    nbcmdline.size = sizeof(cmdline) - 1;
+    nbcmdline.offset = 0;
     cmdline[0] = 0;
 
     printf("\nNetBoot Server Started...\n\n");
@@ -262,6 +265,9 @@ void do_netboot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
         // Restore the TPL before booting the kernel, or failing to netboot
         bs->RestoreTPL(prev_tpl);
 
+        // ensure cmdline is null terminated
+        cmdline[nbcmdline.offset] = 0;
+
         // maybe it's a kernel image?
         EFI_GRAPHICS_OUTPUT_PROTOCOL* gop;
         bs->LocateProtocol(&GraphicsOutputProtocol, NULL, (void**)&gop);
@@ -269,7 +275,7 @@ void do_netboot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
 
         boot_kernel(img, sys, (void*) nbkernel.data, nbkernel.offset,
                     (void*) nbramdisk.data, nbramdisk.offset,
-                    cmdline, sizeof(cmdline));
+                    cmdline, strlen(cmdline), cmdextra, strlen(cmdextra));
         break;
     }
 }
@@ -279,6 +285,13 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
 
     InitializeLib(img, sys);
     InitGoodies(img, sys);
+
+    uint64_t mmio;
+    if (FindPCIMMIO(bs, 0x0C, 0x03, 0x30, &mmio) == EFI_SUCCESS) {
+        sprintf(cmdextra, " xdc.mmio=0x%lx ", mmio);
+    } else {
+        cmdextra[0] = 0;
+    }
 
     // Load the cmdline
     UINTN csz = 0;
@@ -328,7 +341,8 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
         case BOOT_DEVICE_LOCAL: {
             UINTN rsz = 0;
             void* ramdisk = LoadFile(L"ramdisk.bin", &rsz);
-            boot_kernel(img, sys, kernel, ksz, ramdisk, rsz, cmdline, csz);
+            boot_kernel(img, sys, kernel, ksz, ramdisk, rsz,
+                        cmdline, csz, cmdextra, strlen(cmdextra));
             break;
         }
         default:
