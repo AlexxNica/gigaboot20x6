@@ -20,6 +20,8 @@ EFI_STATUS CloseProtocol(EFI_HANDLE h, EFI_GUID* guid);
 
 void* LoadFile(CHAR16* filename, UINTN* size_out);
 
+EFI_STATUS FindPCIMMIO(EFI_BOOT_SERVICES* bs, uint8_t cls, uint8_t sub, uint8_t ifc, uint64_t* mmio);
+
 // GUIDs
 extern EFI_GUID SimpleFileSystemProtocol;
 extern EFI_GUID FileInfoGUID;
