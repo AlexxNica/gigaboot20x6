@@ -29,4 +29,4 @@ typedef unsigned int uint;
 #define INT_MAX (__INT_MAX__)
 
 typedef int ssize_t;
-
+typedef __CHAR16_TYPE__ char16_t;

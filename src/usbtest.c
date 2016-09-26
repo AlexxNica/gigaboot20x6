@@ -2,23 +2,21 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <efi.h>
-#include <efilib.h>
+#include <efi/types.h>
+#include <efi/protocol/device-path.h>
+#include <efi/protocol/driver-binding.h>
+#include <efi/protocol/usb-io.h>
 
 #include <utils.h>
 #include <stdio.h>
 
-#include <Protocol/UsbIo.h>
+EFIAPI efi_status MyDriverSupported(
+    efi_driver_binding_protocol* self, efi_handle ctlr,
+    efi_device_path_protocol* path) {
 
-EFI_GUID UsbIoProtocol = EFI_USB_IO_PROTOCOL_GUID;
-
-EFIAPI EFI_STATUS MyDriverSupported(
-    EFI_DRIVER_BINDING* self, EFI_HANDLE ctlr,
-    EFI_DEVICE_PATH* path) {
-
-    EFI_USB_DEVICE_DESCRIPTOR dev;
-    EFI_USB_IO_PROTOCOL* usbio;
-    EFI_STATUS r;
+    efi_usb_device_descriptor dev;
+    efi_usb_io_protocol* usbio;
+    efi_status r;
 
     r = gBS->OpenProtocol(ctlr, &UsbIoProtocol,
                           (void**)&usbio, self->DriverBindingHandle,
@@ -37,12 +35,12 @@ EFIAPI EFI_STATUS MyDriverSupported(
     return EFI_UNSUPPORTED;
 }
 
-EFIAPI EFI_STATUS MyDriverStart(
-    EFI_DRIVER_BINDING* self, EFI_HANDLE ctlr,
-    EFI_DEVICE_PATH* path) {
-    EFI_STATUS r;
+EFIAPI efi_status MyDriverStart(
+    efi_driver_binding_protocol* self, efi_handle ctlr,
+    efi_device_path_protocol* path) {
+    efi_status r;
 
-    EFI_USB_IO_PROTOCOL* usbio;
+    efi_usb_io_protocol* usbio;
 
     printf("Start! ctlr=%p\n", ctlr);
 
@@ -60,9 +58,9 @@ EFIAPI EFI_STATUS MyDriverStart(
     return EFI_SUCCESS;
 }
 
-EFIAPI EFI_STATUS MyDriverStop(
-    EFI_DRIVER_BINDING* self, EFI_HANDLE ctlr,
-    UINTN count, EFI_HANDLE* children) {
+EFIAPI efi_status MyDriverStop(
+    efi_driver_binding_protocol* self, efi_handle ctlr,
+    size_t count, efi_handle* children) {
 
     printf("Stop! ctlr=%p\n", ctlr);
 
@@ -73,7 +71,7 @@ EFIAPI EFI_STATUS MyDriverStop(
     return EFI_SUCCESS;
 }
 
-static EFI_DRIVER_BINDING MyDriver = {
+static efi_driver_binding_protocol MyDriver = {
     .Supported = MyDriverSupported,
     .Start = MyDriverStart,
     .Stop = MyDriverStop,
@@ -82,18 +80,18 @@ static EFI_DRIVER_BINDING MyDriver = {
     .DriverBindingHandle = NULL,
 };
 
-void InstallMyDriver(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
-    EFI_BOOT_SERVICES* bs = sys->BootServices;
-    EFI_HANDLE* list;
-    UINTN count, i;
-    EFI_STATUS r;
+void InstallMyDriver(efi_handle img, efi_system_table* sys) {
+    efi_boot_services* bs = sys->BootServices;
+    efi_handle* list;
+    size_t count, i;
+    efi_status r;
 
     MyDriver.ImageHandle = img;
     MyDriver.DriverBindingHandle = img;
     r = bs->InstallProtocolInterface(&img, &DriverBindingProtocol,
                                      EFI_NATIVE_INTERFACE, &MyDriver);
     if (r) {
-        Print(L"DriverBinding failed %lx\n", r);
+        printf("DriverBinding failed %lx\n", r);
         return;
     }
 
@@ -101,17 +99,17 @@ void InstallMyDriver(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     r = bs->LocateHandleBuffer(ByProtocol, &UsbIoProtocol, NULL, &count, &list);
     if (r == 0) {
         for (i = 0; i < count; i++) {
-            r = bs->ConnectController(list[i], NULL, NULL, FALSE);
+            r = bs->ConnectController(list[i], NULL, NULL, false);
         }
         bs->FreePool(list);
     }
 }
 
-void RemoveMyDriver(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
-    EFI_BOOT_SERVICES* bs = sys->BootServices;
-    EFI_HANDLE* list;
-    UINTN count, i;
-    EFI_STATUS r;
+void RemoveMyDriver(efi_handle img, efi_system_table* sys) {
+    efi_boot_services* bs = sys->BootServices;
+    efi_handle* list;
+    size_t count, i;
+    efi_status r;
 
     // Disconnect the driver
     r = bs->LocateHandleBuffer(ByProtocol, &UsbIoProtocol, NULL, &count, &list);
@@ -128,11 +126,10 @@ void RemoveMyDriver(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
         printf("UninstallProtocol failed %lx\n", r);
 }
 
-EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
-    InitializeLib(img, sys);
+efi_status efi_main(efi_handle img, efi_system_table* sys) {
     InitGoodies(img, sys);
 
-    Print(L"Hello, EFI World\n");
+    printf("Hello, EFI World\n");
 
     InstallMyDriver(img, sys);
 

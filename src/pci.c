@@ -2,8 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <efi.h>
-#include <efilib.h>
+#include <efi/types.h>
 #include <efi/protocol/pci-root-bridge-io.h>
 
 #include <stdio.h>
@@ -54,10 +53,10 @@ typedef struct {
 #define PCI_MAX_DEVICES 32
 #define PCI_MAX_FUNCS 8
 
-EFI_STATUS FindPCIMMIO(EFI_BOOT_SERVICES* bs, uint8_t cls, uint8_t sub, uint8_t ifc, uint64_t* mmio) {
-    UINTN num_handles;
-    EFI_HANDLE* handles;
-    EFI_STATUS status = bs->LocateHandleBuffer(ByProtocol, &PciRootBridgeIoProtocol,
+efi_status FindPCIMMIO(efi_boot_services* bs, uint8_t cls, uint8_t sub, uint8_t ifc, uint64_t* mmio) {
+    size_t num_handles;
+    efi_handle* handles;
+    efi_status status = bs->LocateHandleBuffer(ByProtocol, &PciRootBridgeIoProtocol,
             NULL, &num_handles, &handles);
     if (EFI_ERROR(status)) {
         printf("Could not find PCI root bridge IO protocol: %s\n", efi_strerror(status));
@@ -66,7 +65,7 @@ EFI_STATUS FindPCIMMIO(EFI_BOOT_SERVICES* bs, uint8_t cls, uint8_t sub, uint8_t 
 
     for (int i = 0; i < num_handles; i++) {
         printf("handle %d\n", i);
-        EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL* iodev;
+        efi_pci_root_bridge_io_protocol* iodev;
         status = bs->HandleProtocol(handles[i], &PciRootBridgeIoProtocol, (void**)&iodev);
         if (EFI_ERROR(status)) {
             printf("Could not get protocol for handle %d: %s\n", i, efi_strerror(status));
@@ -79,10 +78,10 @@ EFI_STATUS FindPCIMMIO(EFI_BOOT_SERVICES* bs, uint8_t cls, uint8_t sub, uint8_t 
             continue;
         }
 
-        UINT16 min_bus, max_bus;
+        uint16_t min_bus, max_bus;
         while (descriptors->descriptor != ACPI_END_TAG_DESCRIPTOR) {
-            min_bus = (UINT16)descriptors->addrrange_minimum;
-            max_bus = (UINT16)descriptors->addrrange_maximum;
+            min_bus = (uint16_t)descriptors->addrrange_minimum;
+            max_bus = (uint16_t)descriptors->addrrange_maximum;
 
             if (descriptors->res_type != ACPI_ADDRESS_SPACE_TYPE_BUS) {
                 descriptors++;
@@ -94,7 +93,7 @@ EFI_STATUS FindPCIMMIO(EFI_BOOT_SERVICES* bs, uint8_t cls, uint8_t sub, uint8_t 
                     for (int func = 0; func < PCI_MAX_FUNCS; func++) {
                         pci_common_header_t pci_hdr;
                         bs->SetMem(&pci_hdr, sizeof(pci_hdr), 0);
-                        UINT64 address = (UINT64)((bus << 24) + (dev << 16) + (func << 8));
+                        uint64_t address = (uint64_t)((bus << 24) + (dev << 16) + (func << 8));
                         status = iodev->Pci.Read(iodev, EfiPciWidthUint16, address, sizeof(pci_hdr) / 2, &pci_hdr);
                         if (EFI_ERROR(status)) {
                             printf("could not read pci configuration for bus %d dev %d func %d: %s\n",

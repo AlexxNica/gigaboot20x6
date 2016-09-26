@@ -4,18 +4,18 @@
 
 #include <magenta.h>
 
-#include <efilib.h>
+#include <efi/protocol/graphics-output.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <utils.h>
 
-static EFI_GUID GraphicsOutputProtocol = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
-static EFI_GUID AcpiTableGUID = ACPI_TABLE_GUID;
-static EFI_GUID Acpi2TableGUID = ACPI_20_TABLE_GUID;
-static UINT8 ACPI_RSD_PTR[8] = "RSD PTR ";
+static efi_guid AcpiTableGUID = ACPI_TABLE_GUID;
+static efi_guid Acpi2TableGUID = ACPI_20_TABLE_GUID;
+static uint8_t ACPI_RSD_PTR[8] = "RSD PTR ";
 
-uint32_t find_acpi_root(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
-    EFI_CONFIGURATION_TABLE* cfgtab = sys->ConfigurationTable;
+uint32_t find_acpi_root(efi_handle img, efi_system_table* sys) {
+    efi_configuration_table* cfgtab = sys->ConfigurationTable;
     int i;
 
     for (i = 0; i < sys->NumberOfTableEntries; i++) {
@@ -24,7 +24,7 @@ uint32_t find_acpi_root(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
             // not an ACPI table
             continue;
         }
-        if (CompareMem(cfgtab[i].VendorTable, ACPI_RSD_PTR, 8)) {
+        if (memcmp(cfgtab[i].VendorTable, ACPI_RSD_PTR, 8)) {
             // not the Root Description Pointer
             continue;
         }
@@ -50,9 +50,9 @@ const char* e820name[] = {
 };
 
 struct e820entry {
-    UINT64 addr;
-    UINT64 size;
-    UINT32 type;
+    uint64_t addr;
+    uint64_t size;
+    uint32_t type;
 } __attribute__((packed));
 
 static unsigned e820type(unsigned uefi_mem_type) {
@@ -91,17 +91,17 @@ static unsigned e820type(unsigned uefi_mem_type) {
 static unsigned char scratch[32768];
 static struct e820entry e820table[128];
 
-static int process_memory_map(EFI_SYSTEM_TABLE* sys, UINTN* _key, int silent) {
-    EFI_MEMORY_DESCRIPTOR* mmap;
+static int process_memory_map(efi_system_table* sys, size_t* _key, int silent) {
+    efi_memory_descriptor* mmap;
     struct e820entry* entry = e820table;
-    UINTN msize, off;
-    UINTN mkey, dsize;
-    UINT32 dversion;
+    size_t msize, off;
+    size_t mkey, dsize;
+    uint32_t dversion;
     unsigned n, type;
-    EFI_STATUS r;
+    efi_status r;
 
     msize = sizeof(scratch);
-    mmap = (EFI_MEMORY_DESCRIPTOR*)scratch;
+    mmap = (efi_memory_descriptor*)scratch;
     mkey = dsize = dversion = 0;
     r = sys->BootServices->GetMemoryMap(&msize, mmap, &mkey, &dsize, &dversion);
     if (!silent)
@@ -115,7 +115,7 @@ static int process_memory_map(EFI_SYSTEM_TABLE* sys, UINTN* _key, int silent) {
         return -1;
     }
     for (off = 0, n = 0; off < msize; off += dsize) {
-        mmap = (EFI_MEMORY_DESCRIPTOR*)(scratch + off);
+        mmap = (efi_memory_descriptor*)(scratch + off);
         type = e820type(mmap->Type);
         if (type == E820_IGNORE) {
             continue;
@@ -166,9 +166,9 @@ static int process_memory_map(EFI_SYSTEM_TABLE* sys, UINTN* _key, int silent) {
 
 #define ZP_MAGIC_VALUE 0xDBC64323
 
-#define ZP8(p, off) (*((UINT8*)((p) + (off))))
-#define ZP16(p, off) (*((UINT16*)((p) + (off))))
-#define ZP32(p, off) (*((UINT32*)((p) + (off))))
+#define ZP8(p, off) (*((uint8_t*)((p) + (off))))
+#define ZP16(p, off) (*((uint16_t*)((p) + (off))))
+#define ZP32(p, off) (*((uint32_t*)((p) + (off))))
 
 static void install_memmap(kernel_t* k, struct e820entry* memmap, unsigned count) {
     memcpy(k->zeropage + ZP_E820_TABLE, memmap, sizeof(*memmap) * count);
@@ -177,7 +177,7 @@ static void install_memmap(kernel_t* k, struct e820entry* memmap, unsigned count
 
 static void start_kernel(kernel_t* k) {
     // 64bit entry is at offset 0x200
-    UINT64 entry = (UINT64)(k->image + 0x200);
+    uint64_t entry = (uint64_t)(k->image + 0x200);
 
     // ebx = 0, ebp = 0, edi = 0, esi = zeropage
     __asm__ __volatile__(
@@ -190,11 +190,11 @@ static void start_kernel(kernel_t* k) {
         ;
 }
 
-static int load_kernel(EFI_BOOT_SERVICES* bs, uint8_t* image, size_t sz, kernel_t* k) {
-    UINT32 setup_sz;
-    UINT32 image_sz;
-    UINT32 setup_end;
-    EFI_PHYSICAL_ADDRESS mem;
+static int load_kernel(efi_boot_services* bs, uint8_t* image, size_t sz, kernel_t* k) {
+    uint32_t setup_sz;
+    uint32_t image_sz;
+    uint32_t setup_end;
+    efi_physical_addr mem;
 
     k->zeropage = NULL;
     k->cmdline = NULL;
@@ -248,10 +248,10 @@ static int load_kernel(EFI_BOOT_SERVICES* bs, uint8_t* image, size_t sz, kernel_
     k->image = (void*)mem;
 
     // setup zero page, copy setup header from kernel binary
-    ZeroMem(k->zeropage, 4096);
-    CopyMem(k->zeropage + ZP_SETUP, image + ZP_SETUP, setup_end - ZP_SETUP);
+    memset(k->zeropage, 0, 4096);
+    memcpy(k->zeropage + ZP_SETUP, image + ZP_SETUP, setup_end - ZP_SETUP);
 
-    CopyMem(k->image, image + setup_sz, image_sz);
+    memcpy(k->image, image + setup_sz, image_sz);
 
     // empty commandline for now
     ZP32(k->zeropage, ZP_CMDLINE) = (uint64_t)k->cmdline;
@@ -270,28 +270,28 @@ static int load_kernel(EFI_BOOT_SERVICES* bs, uint8_t* image, size_t sz, kernel_
     return 0;
 fail:
     if (k->image) {
-        bs->FreePages((EFI_PHYSICAL_ADDRESS)k->image, k->pages);
+        bs->FreePages((efi_physical_addr)k->image, k->pages);
     }
     if (k->cmdline) {
-        bs->FreePages((EFI_PHYSICAL_ADDRESS)k->cmdline, 1);
+        bs->FreePages((efi_physical_addr)k->cmdline, 1);
     }
     if (k->zeropage) {
-        bs->FreePages((EFI_PHYSICAL_ADDRESS)k->zeropage, 1);
+        bs->FreePages((efi_physical_addr)k->zeropage, 1);
     }
 
     return -1;
 }
 
-int boot_kernel(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys,
+int boot_kernel(efi_handle img, efi_system_table* sys,
                 void* image, size_t sz, void* ramdisk, size_t rsz,
                 void* cmdline, size_t csz, void* cmdline2, size_t csz2) {
-    EFI_BOOT_SERVICES* bs = sys->BootServices;
+    efi_boot_services* bs = sys->BootServices;
     kernel_t kernel;
-    EFI_STATUS r;
-    UINTN key;
+    efi_status r;
+    size_t key;
     int n, i;
 
-    EFI_GRAPHICS_OUTPUT_PROTOCOL* gop;
+    efi_graphics_output_protocol* gop;
     bs->LocateProtocol(&GraphicsOutputProtocol, NULL, (void**)&gop);
 
     printf("boot_kernel() from %p (%ld bytes)\n", image, sz);
@@ -307,10 +307,10 @@ int boot_kernel(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys,
     ZP32(kernel.zeropage, ZP_EXTRA_MAGIC) = ZP_MAGIC_VALUE;
     ZP32(kernel.zeropage, ZP_ACPI_RSD) = find_acpi_root(img, sys);
 
-    ZP32(kernel.zeropage, ZP_FB_BASE) = (UINT32)gop->Mode->FrameBufferBase;
-    ZP32(kernel.zeropage, ZP_FB_WIDTH) = (UINT32)gop->Mode->Info->HorizontalResolution;
-    ZP32(kernel.zeropage, ZP_FB_HEIGHT) = (UINT32)gop->Mode->Info->VerticalResolution;
-    ZP32(kernel.zeropage, ZP_FB_STRIDE) = (UINT32)gop->Mode->Info->PixelsPerScanLine;
+    ZP32(kernel.zeropage, ZP_FB_BASE) = (uint32_t)gop->Mode->FrameBufferBase;
+    ZP32(kernel.zeropage, ZP_FB_WIDTH) = (uint32_t)gop->Mode->Info->HorizontalResolution;
+    ZP32(kernel.zeropage, ZP_FB_HEIGHT) = (uint32_t)gop->Mode->Info->VerticalResolution;
+    ZP32(kernel.zeropage, ZP_FB_STRIDE) = (uint32_t)gop->Mode->Info->PixelsPerScanLine;
     ZP32(kernel.zeropage, ZP_FB_FORMAT) = 5; // XRGB32
     ZP32(kernel.zeropage, ZP_FB_REGBASE) = 0;
     ZP32(kernel.zeropage, ZP_FB_SIZE) = 256 * 1024 * 1024;

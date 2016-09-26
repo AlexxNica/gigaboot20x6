@@ -3,9 +3,6 @@
 // found in the LICENSE file.
 
 #include <printf.h>
-
-#include <efi.h>
-#include <efilib.h>
 #include <utils.h>
 
 #define PCBUFMAX 126
@@ -14,12 +11,12 @@
 
 typedef struct {
     int off;
-    CHAR16 buf[PCBUFMAX + 2];
+    char16_t buf[PCBUFMAX + 2];
 } _pcstate;
 
 static int _printf_console_out(const char* str, size_t len, void* _state) {
     _pcstate* state = _state;
-    CHAR16* buf = state->buf;
+    char16_t* buf = state->buf;
     int i = state->off;
     int n = len;
     while (n > 0) {

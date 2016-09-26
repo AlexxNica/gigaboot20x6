@@ -2,16 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <efi.h>
-#include <efilib.h>
+#include <efi/protocol/loaded-image.h>
+#include <efi/protocol/simple-file-system.h>
+
 #include <utils.h>
 #include <stdio.h>
 
-void* LoadFile(CHAR16* filename, UINTN* _sz) {
-    EFI_LOADED_IMAGE* loaded;
-    EFI_STATUS r;
+void* LoadFile(char16_t* filename, size_t* _sz) {
+    efi_loaded_image_protocol* loaded;
+    efi_status r;
     void* data = NULL;
-    UINTN pages = 0;
+    size_t pages = 0;
 
     r = OpenProtocol(gImg, &LoadedImageProtocol, (void**)&loaded);
     if (r) {
@@ -25,21 +26,21 @@ void* LoadFile(CHAR16* filename, UINTN* _sz) {
 	printf("Img Base=%lx Size=%lx\n", loaded->ImageBase, loaded->ImageSize);
 #endif
 
-    EFI_FILE_IO_INTERFACE* fioi;
-    r = OpenProtocol(loaded->DeviceHandle, &SimpleFileSystemProtocol, (void**)&fioi);
+    efi_simple_file_system_protocol* sfs;
+    r = OpenProtocol(loaded->DeviceHandle, &SimpleFileSystemProtocol, (void**)&sfs);
     if (r) {
         printf("LoadFile: Cannot open SimpleFileSystemProtocol (%s)\n", efi_strerror(r));
         goto exit1;
     }
 
-    EFI_FILE_HANDLE root;
-    r = fioi->OpenVolume(fioi, &root);
+    efi_file_protocol* root;
+    r = sfs->OpenVolume(sfs, &root);
     if (r) {
         printf("LoadFile: Cannot open root volume (%s)\n", efi_strerror(r));
         goto exit2;
     }
 
-    EFI_FILE_HANDLE file;
+    efi_file_protocol* file;
     r = root->Open(root, &file, filename, EFI_FILE_MODE_READ, 0);
     if (r) {
         printf("LoadFile: Cannot open file (%s)\n", efi_strerror(r));
@@ -47,16 +48,16 @@ void* LoadFile(CHAR16* filename, UINTN* _sz) {
     }
 
     char buf[512];
-    UINTN sz = sizeof(buf);
-    EFI_FILE_INFO* finfo = (void*)buf;
-    r = file->GetInfo(file, &FileInfoGUID, &sz, finfo);
+    size_t sz = sizeof(buf);
+    efi_file_info* finfo = (void*)buf;
+    r = file->GetInfo(file, &FileInfoGuid, &sz, finfo);
     if (r) {
         printf("LoadFile: Cannot get FileInfo (%s)\n", efi_strerror(r));
         goto exit3;
     }
 
     pages = (finfo->FileSize + 4095) / 4096;
-    r = gBS->AllocatePages(AllocateAnyPages, EfiLoaderData, pages, (EFI_PHYSICAL_ADDRESS *)&data);
+    r = gBS->AllocatePages(AllocateAnyPages, EfiLoaderData, pages, (efi_physical_addr *)&data);
     if (r) {
         printf("LoadFile: Cannot allocate buffer (%s)\n", efi_strerror(r));
         data = NULL;
@@ -67,13 +68,13 @@ void* LoadFile(CHAR16* filename, UINTN* _sz) {
     r = file->Read(file, &sz, data);
     if (r) {
         printf("LoadFile: Error reading file (%s)\n", efi_strerror(r));
-        gBS->FreePages((EFI_PHYSICAL_ADDRESS)data, pages);
+        gBS->FreePages((efi_physical_addr)data, pages);
         data = NULL;
         goto exit4;
     }
     if (sz != finfo->FileSize) {
         printf("LoadFile: Short read\n");
-        gBS->FreePages((EFI_PHYSICAL_ADDRESS)data, pages);
+        gBS->FreePages((efi_physical_addr)data, pages);
         data = NULL;
         goto exit4;
     }

@@ -11,8 +11,7 @@ EFI_OBJCOPY	:= $(EFI_TOOLCHAIN)objcopy
 EFI_AR		:= $(EFI_TOOLCHAIN)ar
 
 EFI_PATH	:= third_party/gnu-efi
-EFI_LIB_PATHS	:= $(EFI_PATH)/$(ARCH)/lib $(EFI_PATH)/$(ARCH)/gnuefi out
-EFI_INC_PATHS	:= $(EFI_PATH)/inc $(EFI_PATH)/inc/$(ARCH) $(EFI_PATH)/inc/protocol
+EFI_LIB_PATHS	:= $(EFI_PATH)/$(ARCH)/gnuefi out
 
 EFI_CRT0	:= $(EFI_PATH)/$(ARCH)/gnuefi/crt0-efi-$(ARCH).o
 EFI_LINKSCRIPT	:= $(EFI_PATH)/gnuefi/elf_$(ARCH)_efi.lds
@@ -20,16 +19,15 @@ EFI_LINKSCRIPT	:= $(EFI_PATH)/gnuefi/elf_$(ARCH)_efi.lds
 EFI_CFLAGS	:= -fpic -fshort-wchar -fno-stack-protector -mno-red-zone
 EFI_CFLAGS	+= -Wall
 EFI_CFLAGS	+= -std=c99
-EFI_CFLAGS	+= -ffreestanding -nostdinc -Iinclude -Isrc -Ithird_party/edk2 -Ithird_party/lk/include
+EFI_CFLAGS	+= -ffreestanding -nostdinc -Iinclude -Isrc -Ithird_party/lk/include
 EFI_CFLAGS	+= $(patsubst %,-I%,$(EFI_INC_PATHS))
-EFI_CFLAGS	+= -DHAVE_USE_MS_ABI=1
 EFI_CFLAGS	+= -ggdb
 
 EFI_LDFLAGS	:= -nostdlib -znocombreloc -T $(EFI_LINKSCRIPT)
 EFI_LDFLAGS	+= -shared -Bsymbolic
 EFI_LDFLAGS	+= $(patsubst %,-L%,$(EFI_LIB_PATHS))
 
-EFI_LIBS	:= -lutils -lefi -lgnuefi
+EFI_LIBS	:= -lutils -lgnuefi
 
 what_to_build::	all
 
@@ -58,6 +56,7 @@ else
 endif
 
 LIB_SRCS := \
+    lib/efi/guids.c \
     lib/utils.c \
     lib/loadfile.c \
     lib/console-printf.c \

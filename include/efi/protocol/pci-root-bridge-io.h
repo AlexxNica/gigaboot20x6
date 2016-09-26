@@ -4,14 +4,12 @@
 
 #pragma once
 
-#include <efi.h>
+#include <efi/boot-services.h>
+#include <efi/types.h>
 
 #define EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_GUID \
     {0x2f707ebb, 0x4a1a, 0x11D4, {0x9a, 0x38, 0x00, 0x90, 0x27, 0x3f, 0xc1, 0x4d}}
-
-EFI_GUID PciRootBridgeIoProtocol = EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_GUID;
-
-struct _EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL;
+extern efi_guid PciRootBridgeIoProtocol;
 
 typedef enum {
     EfiPciWidthUint8,
@@ -27,30 +25,18 @@ typedef enum {
     EfiPciWidthFillUint32,
     EfiPciWidthFillUint64,
     EfiPciWidthMaximum,
-} EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_WIDTH;
+} efi_pci_root_bridge_io_width;
 
-typedef EFI_STATUS (EFIAPI *EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_POLL_IO_MEM) (
-    IN  struct _EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *This,
-    IN  EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_WIDTH   Width,
-    IN  UINT64                                  Address,
-    IN  UINT64                                  Mask,
-    IN  UINT64                                  Value,
-    IN  UINT64                                  Delay,
-    OUT UINT64                                  *Result
-);
-
-typedef EFI_STATUS (EFIAPI *EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_IO_MEM) (
-    IN     struct _EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *This,
-    IN     EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_WIDTH   Width,
-    IN     UINT64                                  Address,
-    IN     UINTN                                   Count,
-    IN OUT VOID                                    *Buffer
-);
+struct efi_pci_root_bridge_io_protocol;
 
 typedef struct {
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_IO_MEM Read;
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_IO_MEM Write;
-} EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_ACCESS;
+    efi_status (*Read) (struct efi_pci_root_bridge_io_protocol* self,
+                        efi_pci_root_bridge_io_width   width,
+                        uint64_t addr, size_t count, void* buffer) EFIAPI;
+    efi_status (*Write) (struct efi_pci_root_bridge_io_protocol* self,
+                         efi_pci_root_bridge_io_width   width,
+                         uint64_t addr, size_t count, void* buffer) EFIAPI;
+} efi_pci_root_bridge_io_access;
 
 #define EFI_PCI_ATTRIBUTE_ISA_MOTHERBOARD_IO 0x0001
 #define EFI_PCI_ATTRIBUTE_ISA_IO 0x0002
@@ -75,82 +61,55 @@ typedef enum {
     EfiPciOperationBusMasterWrite64,
     EfiPciOperationBusMasterCommonBuffer64,
     EfiPciOperationMaximum,
-} EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_OPERATION;
+} efi_pci_root_bridge_io_operation;
 
-typedef EFI_STATUS (EFIAPI *EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_COPY_MEM) (
-    IN struct _EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *This,
-    IN EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_WIDTH   Width,
-    IN UINT64                                  DestAddress,
-    IN UINT64                                  SrcAddress,
-    IN UINTN                                   Count
-);
+typedef struct efi_pci_root_bridge_io_protocol {
+    efi_handle ParentHandle;
 
-typedef EFI_STATUS (EFIAPI *EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_MAP) (
-    IN  struct _EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL   *This,
-    IN  EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_OPERATION Operation,
-    IN  VOID                                      *HostAddress,
-    IN  OUT UINTN                                 *NumberOfBytes,
-    OUT EFI_PHYSICAL_ADDRESS                      *DeviceAddress,
-    OUT VOID                                      **Mapping
-);
+    efi_status (*PollMem) (struct efi_pci_root_bridge_io_protocol *self,
+                           efi_pci_root_bridge_io_width width,
+                           uint64_t addr, uint64_t mask, uint64_t value, uint64_t delay,
+                           uint64_t* result) EFIAPI;
 
-typedef EFI_STATUS (EFIAPI *EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_UNMAP) (
-    IN struct _EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *This,
-    IN VOID                                    *Mapping
-);
+    efi_status (*PollIo) (struct efi_pci_root_bridge_io_protocol *self,
+                          efi_pci_root_bridge_io_width width,
+                          uint64_t addr, uint64_t mask, uint64_t value, uint64_t delay,
+                          uint64_t* result) EFIAPI;
 
-typedef EFI_STATUS (EFIAPI *EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_ALLOCATE_BUFFER) (
-    IN  struct _EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *This,
-    IN  EFI_ALLOCATE_TYPE                       Type,
-    IN  EFI_MEMORY_TYPE                         MemoryType,
-    IN  UINTN                                   Pages,
-    OUT VOID                                    **HostAddress,
-    IN  UINT64                                  Attributes
-);
+    efi_pci_root_bridge_io_access Mem;
+    efi_pci_root_bridge_io_access Io;
+    efi_pci_root_bridge_io_access Pci;
 
-typedef EFI_STATUS (EFIAPI *EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_FREE_BUFFER) (
-    IN struct _EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *This,
-    IN UINTN                                   Pages,
-    IN VOID                                    *HostAddress
-);
+    efi_status (*CopyMem) (struct efi_pci_root_bridge_io_protocol* self,
+                           efi_pci_root_bridge_io_width width,
+                           uint64_t dest_addr, uint64_t src_addr, size_t count) EFIAPI;
 
-typedef EFI_STATUS (EFIAPI *EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_FLUSH) (
-    IN struct _EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *This
-);
+    efi_status (*Map) (struct efi_pci_root_bridge_io_protocol* self,
+                       efi_pci_root_bridge_io_operation operation,
+                       void* host_addr, size_t* num_bytes,
+                       efi_physical_addr* device_addr, void** mapping) EFIAPI;
 
-typedef EFI_STATUS (EFIAPI *EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_GET_ATTRIBUTES) (
-    IN  struct _EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *This,
-    OUT UINT64                                  *Supports   OPTIONAL,
-    OUT UINT64                                  *Attributes OPTIONAL
-);
+    efi_status (*Unmap) (struct efi_pci_root_bridge_io_protocol* self,
+                         void* mapping) EFIAPI;
 
-typedef EFI_STATUS (EFIAPI *EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_SET_ATTRIBUTES) (
-    IN     struct _EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *This,
-    IN     UINT64                                  Attributes,
-    IN OUT UINT64                                  *ResourceBase   OPTIONAL,
-    IN OUT UINT64                                  *ResourceLength OPTIONAL
-);
+    efi_status (*AllocateBuffer) (struct efi_pci_root_bridge_io_protocol* self,
+                                  efi_allocate_type type, efi_memory_type memory_type,
+                                  size_t pages, void** host_addr, uint64_t attributes) EFIAPI;
 
-typedef EFI_STATUS (EFIAPI *EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_CONFIGURATION) (
-    IN  struct _EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL *This,
-    OUT VOID                                    **Resources
-);
+    efi_status (*FreeBuffer) (struct efi_pci_root_bridge_io_protocol* self,
+                              size_t pages, void* host_addr) EFIAPI;
 
-typedef struct _EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL {
-    EFI_HANDLE ParentHandle;
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_POLL_IO_MEM PollMem;
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_POLL_IO_MEM PollIo;
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_ACCESS Mem;
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_ACCESS Io;
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_ACCESS Pci;
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_COPY_MEM CopyMem;
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_MAP Map;
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_UNMAP Unmap;
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_ALLOCATE_BUFFER AllocateBuffer;
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_FREE_BUFFER FreeBuffer;
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_FLUSH Flush;
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_GET_ATTRIBUTES GetAttributes;
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_SET_ATTRIBUTES SetAttributes;
-    EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL_CONFIGURATION Configuration;
-    UINT32 SegmentNumber;
-} EFI_PCI_ROOT_BRIDGE_IO_PROTOCOL;
+    efi_status (*Flush) (struct efi_pci_root_bridge_io_protocol* self) EFIAPI;
+
+    efi_status (*GetAttributes) (struct efi_pci_root_bridge_io_protocol* self,
+                                 uint64_t* supports, uint64_t* attributes) EFIAPI;
+
+    efi_status (*SetAttributes) (struct efi_pci_root_bridge_io_protocol* self,
+                                 uint64_t attributes, uint64_t* resource_base,
+                                 uint64_t* resource_len) EFIAPI;
+
+    efi_status (*Configuration) (struct efi_pci_root_bridge_io_protocol* self,
+                                 void** resources) EFIAPI;
+
+    uint32_t SegmentNumber;
+} efi_pci_root_bridge_io_protocol;

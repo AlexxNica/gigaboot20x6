@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <efi.h>
+#include <efi/types.h>
 
-EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
-    SIMPLE_TEXT_OUTPUT_INTERFACE* ConOut = sys->ConOut;
+efi_status efi_main(efi_handle img, efi_system_table* sys) {
+    efi_simple_text_output_protocol* ConOut = sys->ConOut;
     ConOut->OutputString(ConOut, L"Hello, EFI World!\r\n");
     return EFI_SUCCESS;
 }

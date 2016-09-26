@@ -2,48 +2,51 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <efi.h>
-#include <efilib.h>
+#include <efi/system-table.h>
+#include <efi/types.h>
+#include <efi/protocol/loaded-image.h>
+#include <efi/protocol/simple-file-system.h>
+
+#include <stdio.h>
 #include <utils.h>
 
-EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
-    EFI_LOADED_IMAGE* loaded;
-    EFI_STATUS r;
+efi_status efi_main(efi_handle img, efi_system_table* sys) {
+    efi_loaded_image_protocol* loaded;
+    efi_status r;
 
-    InitializeLib(img, sys);
     InitGoodies(img, sys);
 
-    Print(L"Hello, EFI World\n");
+    printf("Hello, EFI World\n");
 
     r = OpenProtocol(img, &LoadedImageProtocol, (void**)&loaded);
     if (r)
         Fatal("LoadedImageProtocol", r);
 
-    Print(L"Img DeviceHandle='%s'\n", HandleToString(loaded->DeviceHandle));
-    Print(L"Img FilePath='%s'\n", DevicePathToStr(loaded->FilePath));
-    Print(L"Img Base=%lx Size=%lx\n", loaded->ImageBase, loaded->ImageSize);
+    printf("Img DeviceHandle='%ls'\n", HandleToString(loaded->DeviceHandle));
+    printf("Img FilePath='%ls'\n", DevicePathToStr(loaded->FilePath));
+    printf("Img Base=%p Size=%lx\n", loaded->ImageBase, loaded->ImageSize);
 
-    EFI_FILE_IO_INTERFACE* fioi;
-    r = OpenProtocol(loaded->DeviceHandle, &SimpleFileSystemProtocol, (void**)&fioi);
+    efi_simple_file_system_protocol* sfs;
+    r = OpenProtocol(loaded->DeviceHandle, &SimpleFileSystemProtocol, (void**)&sfs);
     if (r)
         Fatal("SimpleFileSystemProtocol", r);
 
-    EFI_FILE_HANDLE root;
-    r = fioi->OpenVolume(fioi, &root);
+    efi_file_protocol* root;
+    r = sfs->OpenVolume(sfs, &root);
     if (r)
         Fatal("OpenVolume", r);
 
-    EFI_FILE_HANDLE file;
+    efi_file_protocol* file;
     r = root->Open(root, &file, L"README.txt", EFI_FILE_MODE_READ, 0);
 
     if (r == EFI_SUCCESS) {
         char buf[512];
-        UINTN sz = sizeof(buf);
-        EFI_FILE_INFO* finfo = (void*)buf;
-        r = file->GetInfo(file, &FileInfoGUID, &sz, finfo);
+        size_t sz = sizeof(buf);
+        efi_file_info* finfo = (void*)buf;
+        r = file->GetInfo(file, &FileInfoGuid, &sz, finfo);
         if (r)
             Fatal("GetInfo", r);
-        Print(L"FileSize %ld\n", finfo->FileSize);
+        printf("FileSize %ld\n", finfo->FileSize);
 
         sz = sizeof(buf) - 1;
         r = file->Read(file, &sz, buf);
@@ -52,7 +55,7 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
 
         char* x = buf;
         while (sz-- > 0)
-            Print(L"%c", (CHAR16)*x++);
+            printf("%c", *x++);
 
         file->Close(file);
     }

@@ -2,16 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <efi.h>
-#include <efilib.h>
+#include <efi/types.h>
+#include <efi/protocol/device-path-to-text.h>
+#include <efi/protocol/file.h>
+#include <efi/protocol/simple-file-system.h>
 
-#include <utils.h>
+#include <stdlib.h>
+#include <string.h>
 #include <printf.h>
+#include <utils.h>
 
 #define ERR_ENTRY(x) { #x, L"" #x }
 typedef struct {
-    const char *str;
-    const CHAR16 *w_str;
+    const char* str;
+    const char16_t* w_str;
 } err_entry_t;
 
 err_entry_t efi_error_labels[] = {
@@ -49,18 +53,12 @@ err_entry_t efi_error_labels[] = {
     ERR_ENTRY(EFI_COMPROMISED_DATA),
 };
 
-// Useful GUID Constants Not Defined by -lefi
-EFI_GUID SimpleFileSystemProtocol = SIMPLE_FILE_SYSTEM_PROTOCOL;
-EFI_GUID FileInfoGUID = EFI_FILE_INFO_ID;
+efi_system_table* gSys;
+efi_handle gImg;
+efi_boot_services* gBS;
+efi_simple_text_output_protocol* gConOut;
 
-// -lefi has its own globals, but this may end up not
-// depending on that, so let's not depend on those
-EFI_SYSTEM_TABLE* gSys;
-EFI_HANDLE gImg;
-EFI_BOOT_SERVICES* gBS;
-SIMPLE_TEXT_OUTPUT_INTERFACE* gConOut;
-
-void InitGoodies(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
+void InitGoodies(efi_handle img, efi_system_table* sys) {
     gSys = sys;
     gImg = img;
     gBS = sys->BootServices;
@@ -68,38 +66,66 @@ void InitGoodies(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
 }
 
 void WaitAnyKey(void) {
-    SIMPLE_INPUT_INTERFACE* sii = gSys->ConIn;
-    EFI_INPUT_KEY key;
+    efi_simple_text_input_protocol* sii = gSys->ConIn;
+    efi_input_key key;
     while (sii->ReadKeyStroke(sii, &key) != EFI_SUCCESS)
         ;
 }
 
-void Fatal(const char* msg, EFI_STATUS status) {
+void Fatal(const char* msg, efi_status status) {
     printf("\nERROR: %s (%s)\n", msg, efi_strerror(status));
     WaitAnyKey();
     gBS->Exit(gImg, 1, 0, NULL);
 }
 
-CHAR16* HandleToString(EFI_HANDLE h) {
-    EFI_DEVICE_PATH* path = DevicePathFromHandle(h);
-    if (path == NULL)
-        return L"<NoPath>";
-    CHAR16* str = DevicePathToStr(path);
-    if (str == NULL)
-        return L"<NoString>";
+char16_t* DevicePathToStr(efi_device_path_protocol* path) {
+    efi_device_path_to_text_protocol* prot;
+    efi_status status = gBS->LocateProtocol(&DevicePathToTextProtocol, NULL, (void**)&prot);
+    if (EFI_ERROR(status)) {
+        return NULL;
+    }
+    return prot->ConvertDevicePathToText(path, false, false);
+}
+
+int CompareGuid(efi_guid* guid1, efi_guid* guid2) {
+    return memcmp(guid1, guid2, sizeof(efi_guid));
+}
+
+char16_t* HandleToString(efi_handle h) {
+    efi_device_path_protocol* path;
+    efi_status status = gBS->HandleProtocol(h, &DevicePathProtocol, (void*)&path);
+    if (EFI_ERROR(status)) {
+        char16_t* err;
+        status = gBS->AllocatePool(EfiLoaderData, sizeof(L"<NoPath>"), (void**)&err);
+        if (EFI_ERROR(status)) {
+            return NULL;
+        }
+        gBS->CopyMem(err, L"<NoPath>", sizeof(L"<NoPath>"));
+        return err;
+    }
+    char16_t* str = DevicePathToStr(path);
+    if (str == NULL) {
+        char16_t* err;
+        status = gBS->AllocatePool(EfiLoaderData, sizeof(L"<NoString>"), (void**)&err);
+        if (EFI_ERROR(status)) {
+            return NULL;
+        }
+        gBS->CopyMem(err, L"<NoString>", sizeof(L"<NoString>"));
+        return err;
+    }
     return str;
 }
 
-EFI_STATUS OpenProtocol(EFI_HANDLE h, EFI_GUID* guid, void** ifc) {
+efi_status OpenProtocol(efi_handle h, efi_guid* guid, void** ifc) {
     return gBS->OpenProtocol(h, guid, ifc, gImg, NULL,
                              EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL);
 }
 
-EFI_STATUS CloseProtocol(EFI_HANDLE h, EFI_GUID* guid) {
+efi_status CloseProtocol(efi_handle h, efi_guid* guid) {
     return gBS->CloseProtocol(h, guid, gImg, NULL);
 }
 
-const char *efi_strerror(EFI_STATUS status)
+const char *efi_strerror(efi_status status)
 {
     size_t i = (~EFI_ERROR_MASK & status);
     if (i < sizeof(efi_error_labels)/sizeof(efi_error_labels[0])) {
@@ -109,7 +135,7 @@ const char *efi_strerror(EFI_STATUS status)
     return "<Unknown error>";
 }
 
-const CHAR16 *efi_wstrerror(EFI_STATUS status)
+const char16_t* efi_wstrerror(efi_status status)
 {
     size_t i = (~EFI_ERROR_MASK & status);
     if (i < sizeof(efi_error_labels)/sizeof(efi_error_labels[0])) {
@@ -119,7 +145,7 @@ const CHAR16 *efi_wstrerror(EFI_STATUS status)
     return L"<Unknown error>";
 }
 
-size_t strlen_16(CHAR16 *str)
+size_t strlen_16(char16_t* str)
 {
     size_t len = 0;
     while (*(str + len) != '\0') {

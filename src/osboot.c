@@ -2,18 +2,20 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <efi.h>
-#include <efilib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <efi/boot-services.h>
+#include <efi/system-table.h>
+#include <efi/protocol/device-path.h>
+#include <efi/protocol/graphics-output.h>
+#include <efi/protocol/simple-text-input.h>
 
 #include <cmdline.h>
 #include <magenta.h>
 #include <netboot.h>
 #include <utils.h>
-
-static EFI_GUID GraphicsOutputProtocol = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
 
 #define DEFAULT_TIMEOUT 3
 
@@ -49,15 +51,15 @@ enum {
     BOOT_DEVICE_LOCAL,
 };
 
-int boot_prompt(EFI_SYSTEM_TABLE* sys, int timeout_s) {
-    EFI_BOOT_SERVICES* bs = sys->BootServices;
+int boot_prompt(efi_system_table* sys, int timeout_s) {
+    efi_boot_services* bs = sys->BootServices;
 
-    EFI_EVENT TimerEvent;
-    EFI_EVENT WaitList[2];
+    efi_event TimerEvent;
+    efi_event WaitList[2];
 
-    EFI_STATUS status;
-    UINTN Index;
-    EFI_INPUT_KEY key;
+    efi_status status;
+    size_t Index;
+    efi_input_key key;
     memset(&key, 0, sizeof(key));
 
     status = bs->CreateEvent(EVT_TIMER, 0, NULL, NULL, &TimerEvent);
@@ -117,7 +119,7 @@ int boot_prompt(EFI_SYSTEM_TABLE* sys, int timeout_s) {
     return BOOT_DEVICE_NETBOOT;
 }
 
-void set_graphics_mode(EFI_SYSTEM_TABLE* sys, EFI_GRAPHICS_OUTPUT_PROTOCOL* gop, char* cmdline) {
+void set_graphics_mode(efi_system_table* sys, efi_graphics_output_protocol* gop, char* cmdline) {
     if (!gop || !cmdline) return;
 
     char res[11];
@@ -134,12 +136,12 @@ void set_graphics_mode(EFI_SYSTEM_TABLE* sys, EFI_GRAPHICS_OUTPUT_PROTOCOL* gop,
     vres = atol(x);
     if (!hres || !vres) return;
 
-    UINT32 max_mode = gop->Mode->MaxMode;
+    uint32_t max_mode = gop->Mode->MaxMode;
 
     for (int i = 0; i < max_mode; i++) {
-        EFI_GRAPHICS_OUTPUT_MODE_INFORMATION* mode_info;
-        UINTN info_size = 0;
-        EFI_STATUS status = gop->QueryMode(gop, i, &info_size, &mode_info);
+        efi_graphics_output_mode_information* mode_info;
+        size_t info_size = 0;
+        efi_status status = gop->QueryMode(gop, i, &info_size, &mode_info);
         if (EFI_ERROR(status)) {
             printf("Could not retrieve mode %d: %s\n", i, efi_strerror(status));
             continue;
@@ -158,17 +160,17 @@ void set_graphics_mode(EFI_SYSTEM_TABLE* sys, EFI_GRAPHICS_OUTPUT_PROTOCOL* gop,
     sys->BootServices->Stall(5000000);
 }
 
-void draw_logo(EFI_GRAPHICS_OUTPUT_PROTOCOL* gop) {
+void draw_logo(efi_graphics_output_protocol* gop) {
     if (!gop) return;
 
     const uint32_t h_res = gop->Mode->Info->HorizontalResolution;
     const uint32_t v_res = gop->Mode->Info->VerticalResolution;
-    EFI_GRAPHICS_OUTPUT_BLT_PIXEL fuchsia = {
+    efi_graphics_output_blt_pixel fuchsia = {
         .Red = 0xFF,
         .Green = 0x0,
         .Blue = 0xFF,
     };
-    EFI_GRAPHICS_OUTPUT_BLT_PIXEL black = {
+    efi_graphics_output_blt_pixel black = {
         .Red = 0x0,
         .Green = 0x0,
         .Blue = 0x0
@@ -181,10 +183,10 @@ void draw_logo(EFI_GRAPHICS_OUTPUT_PROTOCOL* gop) {
     gop->Blt(gop, &fuchsia, EfiBltVideoFill, 0, 0, 0, v_res - (v_res/100), h_res, v_res/100, 0);
 }
 
-void do_netboot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
-    EFI_BOOT_SERVICES* bs = sys->BootServices;
+void do_netboot(efi_handle img, efi_system_table* sys) {
+    efi_boot_services* bs = sys->BootServices;
 
-    EFI_PHYSICAL_ADDRESS mem = 0xFFFFFFFF;
+    efi_physical_addr mem = 0xFFFFFFFF;
     if (bs->AllocatePages(AllocateMaxAddress, EfiLoaderData, KBUFSIZE / 4096, &mem)) {
         printf("Failed to allocate network io buffer\n");
         return;
@@ -206,7 +208,7 @@ void do_netboot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     cmdline[0] = 0;
 
     printf("\nNetBoot Server Started...\n\n");
-    EFI_TPL prev_tpl = bs->RaiseTPL(TPL_NOTIFY);
+    efi_tpl prev_tpl = bs->RaiseTPL(TPL_NOTIFY);
     for (;;) {
         int n = netboot_poll();
         if (n < 1) {
@@ -218,34 +220,34 @@ void do_netboot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
         }
         uint8_t* x = nbkernel.data;
         if ((x[0] == 'M') && (x[1] == 'Z') && (x[0x80] == 'P') && (x[0x81] == 'E')) {
-            UINTN exitdatasize;
-            EFI_STATUS r;
-            EFI_HANDLE h;
+            size_t exitdatasize;
+            efi_status r;
+            efi_handle h;
 
-            MEMMAP_DEVICE_PATH mempath[2] = {
+            efi_device_path_hw_memmap mempath[2] = {
                 {
                     .Header = {
-                        .Type = HARDWARE_DEVICE_PATH,
-                        .SubType = HW_MEMMAP_DP,
-                        .Length = { (UINT8)(sizeof(MEMMAP_DEVICE_PATH) & 0xff),
-                            (UINT8)((sizeof(MEMMAP_DEVICE_PATH) >> 8) & 0xff), },
+                        .Type = DEVICE_PATH_HARDWARE,
+                        .SubType = DEVICE_PATH_HW_MEMMAP,
+                        .Length = { (uint8_t)(sizeof(efi_device_path_hw_memmap) & 0xff),
+                            (uint8_t)((sizeof(efi_device_path_hw_memmap) >> 8) & 0xff), },
                     },
                     .MemoryType = EfiLoaderData,
-                    .StartingAddress = (EFI_PHYSICAL_ADDRESS)nbkernel.data,
-                    .EndingAddress = (EFI_PHYSICAL_ADDRESS)(nbkernel.data + nbkernel.offset),
+                    .StartAddress = (efi_physical_addr)nbkernel.data,
+                    .EndAddress = (efi_physical_addr)(nbkernel.data + nbkernel.offset),
                 },
                 {
                     .Header = {
-                        .Type = END_DEVICE_PATH_TYPE,
-                        .SubType = END_ENTIRE_DEVICE_PATH_SUBTYPE,
-                        .Length = { (UINT8)(sizeof(EFI_DEVICE_PATH) & 0xff),
-                            (UINT8)((sizeof(EFI_DEVICE_PATH) >> 8) & 0xff), },
+                        .Type = DEVICE_PATH_END,
+                        .SubType = DEVICE_PATH_ENTIRE_END,
+                        .Length = { (uint8_t)(sizeof(efi_device_path_protocol) & 0xff),
+                            (uint8_t)((sizeof(efi_device_path_protocol) >> 8) & 0xff), },
                     },
                 },
             };
 
             printf("Attempting to run EFI binary...\n");
-            r = bs->LoadImage(FALSE, img, (EFI_DEVICE_PATH*)mempath, (void*)nbkernel.data, nbkernel.offset, &h);
+            r = bs->LoadImage(false, img, (efi_device_path_protocol*)mempath, (void*)nbkernel.data, nbkernel.offset, &h);
             if (EFI_ERROR(r)) {
                 printf("LoadImage Failed (%s)\n", efi_strerror(r));
                 continue;
@@ -269,7 +271,7 @@ void do_netboot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
         cmdline[nbcmdline.offset] = 0;
 
         // maybe it's a kernel image?
-        EFI_GRAPHICS_OUTPUT_PROTOCOL* gop;
+        efi_graphics_output_protocol* gop;
         bs->LocateProtocol(&GraphicsOutputProtocol, NULL, (void**)&gop);
         set_graphics_mode(sys, gop, cmdline);
 
@@ -280,10 +282,9 @@ void do_netboot(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     }
 }
 
-EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
-    EFI_BOOT_SERVICES* bs = sys->BootServices;
+efi_status efi_main(efi_handle img, efi_system_table* sys) {
+    efi_boot_services* bs = sys->BootServices;
 
-    InitializeLib(img, sys);
     InitGoodies(img, sys);
 
     uint64_t mmio;
@@ -294,14 +295,14 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
     }
 
     // Load the cmdline
-    UINTN csz = 0;
+    size_t csz = 0;
     char* cmdline = LoadFile(L"cmdline", &csz);
     if (cmdline) {
         cmdline[csz] = '\0';
         printf("cmdline: %s\n", cmdline);
     }
 
-    EFI_GRAPHICS_OUTPUT_PROTOCOL* gop;
+    efi_graphics_output_protocol* gop;
     bs->LocateProtocol(&GraphicsOutputProtocol, NULL, (void**)&gop);
     set_graphics_mode(sys, gop, cmdline);
     draw_logo(gop);
@@ -314,7 +315,7 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
 
     // Look for a kernel image on disk
     // TODO: use the filesystem protocol
-    UINTN ksz = 0;
+    size_t ksz = 0;
     void* kernel = LoadFile(L"magenta.bin", &ksz);
 
     if (!have_network && kernel == NULL) {
@@ -339,7 +340,7 @@ EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
             do_netboot(img, sys);
             break;
         case BOOT_DEVICE_LOCAL: {
-            UINTN rsz = 0;
+            size_t rsz = 0;
             void* ramdisk = LoadFile(L"ramdisk.bin", &rsz);
             boot_kernel(img, sys, kernel, ksz, ramdisk, rsz,
                         cmdline, csz, cmdextra, strlen(cmdextra));

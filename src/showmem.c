@@ -2,12 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <efi.h>
-#include <efilib.h>
+#include <efi/types.h>
+#include <efi/system-table.h>
 
 #include <printf.h>
 
-static const char* MemTypeName(UINT32 type, char* buf) {
+static const char* MemTypeName(uint32_t type, char* buf) {
     switch (type) {
     case EfiReservedMemoryType:
         return "Reserved";
@@ -45,16 +45,16 @@ static const char* MemTypeName(UINT32 type, char* buf) {
 
 static unsigned char scratch[4096];
 
-static void dump_memmap(EFI_SYSTEM_TABLE* systab) {
-    EFI_STATUS r;
-    UINTN msize, off;
-    EFI_MEMORY_DESCRIPTOR* mmap;
-    UINTN mkey, dsize;
-    UINT32 dversion;
+static void dump_memmap(efi_system_table* systab) {
+    efi_status r;
+    size_t msize, off;
+    efi_memory_descriptor* mmap;
+    size_t mkey, dsize;
+    uint32_t dversion;
     char tmp[32];
 
     msize = sizeof(scratch);
-    mmap = (EFI_MEMORY_DESCRIPTOR*)scratch;
+    mmap = (efi_memory_descriptor*)scratch;
     mkey = dsize = dversion;
     r = systab->BootServices->GetMemoryMap(&msize, mmap, &mkey, &dsize, &dversion);
     printf("r=%lx msz=%lx key=%lx dsz=%lx dvn=%x\n",
@@ -63,7 +63,7 @@ static void dump_memmap(EFI_SYSTEM_TABLE* systab) {
         return;
     }
     for (off = 0; off < msize; off += dsize) {
-        mmap = (EFI_MEMORY_DESCRIPTOR*)(scratch + off);
+        mmap = (efi_memory_descriptor*)(scratch + off);
         printf("%016lx %016lx %08lx %c %04lx %s\n",
                mmap->PhysicalStart, mmap->VirtualStart,
                mmap->NumberOfPages,
@@ -75,8 +75,7 @@ static void dump_memmap(EFI_SYSTEM_TABLE* systab) {
 
 #include <utils.h>
 
-EFI_STATUS efi_main(EFI_HANDLE img, EFI_SYSTEM_TABLE* sys) {
-    InitializeLib(img, sys);
+efi_status efi_main(efi_handle img, efi_system_table* sys) {
     InitGoodies(img, sys);
     dump_memmap(sys);
     WaitAnyKey();

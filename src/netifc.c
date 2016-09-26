@@ -2,8 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <efi.h>
-#include <efilib.h>
+#include <efi/protocol/simple-network.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -12,10 +11,10 @@
 #include <inet6.h>
 #include <netifc.h>
 
-static EFI_SIMPLE_NETWORK* snp;
+static efi_simple_network_protocol* snp;
 
 #define MAX_FILTER 8
-static EFI_MAC_ADDRESS mcast_filters[MAX_FILTER];
+static efi_mac_addr mcast_filters[MAX_FILTER];
 static unsigned mcast_filter_count = 0;
 
 #define NUM_BUFFER_PAGES 8
@@ -30,7 +29,7 @@ struct eth_buffer_t {
     uint8_t data[0];
 };
 
-static EFI_PHYSICAL_ADDRESS eth_buffers_base = 0;
+static efi_physical_addr eth_buffers_base = 0;
 static eth_buffer* eth_buffers = NULL;
 
 void* eth_get_buffer(size_t sz) {
@@ -60,7 +59,7 @@ void eth_put_buffer(void* data) {
 }
 
 int eth_send(void* data, size_t len) {
-    EFI_STATUS r;
+    efi_status r;
 
     if ((r = snp->Transmit(snp, 0, len, (void*)data, NULL, NULL, NULL))) {
         eth_put_buffer(data);
@@ -77,7 +76,7 @@ void eth_dump_status(void) {
     printf("RcvMask/RcvCfg/MaxMcast/NumMcast %d %d %d %d\n",
            snp->Mode->ReceiveFilterMask, snp->Mode->ReceiveFilterSetting,
            snp->Mode->MaxMCastFilterCount, snp->Mode->MCastFilterCount);
-    UINT8* x = snp->Mode->CurrentAddress.Addr;
+    uint8_t* x = snp->Mode->CurrentAddress.addr;
     printf("MacAddr %02x:%02x:%02x:%02x:%02x:%02x\n",
            x[0], x[1], x[2], x[3], x[4], x[5]);
     printf("SetMac/MultiTx/LinkDetect/Link %d %d %d %d\n",
@@ -95,7 +94,7 @@ int eth_add_mcast_filter(const mac_addr* addr) {
     return 0;
 }
 
-static EFI_EVENT net_timer = NULL;
+static efi_event net_timer = NULL;
 
 #define TIMER_MS(n) (((uint64_t)(n)) * 10000UL)
 
@@ -118,12 +117,12 @@ int netifc_timer_expired(void) {
 
 /* Search the available network interfaces via SimpleNetworkProtocol handles
  * and find the first valid one with a Link detected */
-EFI_SIMPLE_NETWORK *netifc_find_available(void) {
-    EFI_BOOT_SERVICES* bs = gSys->BootServices;
-    EFI_STATUS ret;
-    EFI_SIMPLE_NETWORK *cur_snp = NULL;
-    EFI_HANDLE handles[32];
-    CHAR16 *paths[32];
+efi_simple_network_protocol* netifc_find_available(void) {
+    efi_boot_services* bs = gSys->BootServices;
+    efi_status ret;
+    efi_simple_network_protocol* cur_snp = NULL;
+    efi_handle handles[32];
+    char16_t *paths[32];
     size_t nic_cnt = 0;
     size_t sz = sizeof(handles);
     uint32_t last_parent = 0;
@@ -137,7 +136,7 @@ EFI_SIMPLE_NETWORK *netifc_find_available(void) {
         return NULL;
     }
 
-    nic_cnt = sz / sizeof(EFI_HANDLE);
+    nic_cnt = sz / sizeof(efi_handle);
     for (size_t i = 0; i < nic_cnt; i++) {
         paths[i] = HandleToString(handles[i]);
     }
@@ -155,7 +154,7 @@ EFI_SIMPLE_NETWORK *netifc_find_available(void) {
             }
         }
 
-        Print(L"%s: ", paths[i]);
+        printf("%ls: ", paths[i]);
         ret = bs->HandleProtocol(handles[i], &SimpleNetworkProtocol, (void**)&cur_snp);
         if (ret) {
             printf("Failed to open (%s)\n", efi_strerror(ret));
@@ -205,8 +204,8 @@ link_fail:
 }
 
 int netifc_open(void) {
-    EFI_BOOT_SERVICES* bs = gSys->BootServices;
-    EFI_STATUS ret;
+    efi_boot_services* bs = gSys->BootServices;
+    efi_status ret;
     int j;
 
     bs->CreateEvent(EVT_TIMER, TPL_CALLBACK, NULL, NULL, &net_timer);
@@ -230,7 +229,7 @@ int netifc_open(void) {
         ptr += 2048;
     }
 
-    ip6_init(snp->Mode->CurrentAddress.Addr);
+    ip6_init(snp->Mode->CurrentAddress.addr);
 
     ret = snp->ReceiveFilters(snp,
                             EFI_SIMPLE_NETWORK_RECEIVE_UNICAST |
@@ -290,11 +289,11 @@ int netifc_active(void) {
 }
 
 void netifc_poll(void) {
-    UINT8 data[1514];
-    EFI_STATUS r;
-    UINTN hsz, bsz;
-    UINT32 irq;
-    VOID* txdone;
+    uint8_t data[1514];
+    efi_status r;
+    size_t hsz, bsz;
+    uint32_t irq;
+    void* txdone;
 
     if ((r = snp->GetStatus(snp, &irq, &txdone))) {
         return;
