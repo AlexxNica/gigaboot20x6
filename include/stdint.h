@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <stdbool.h>
+
 typedef __UINT8_TYPE__ uint8_t;
 typedef __UINT16_TYPE__ uint16_t;
 typedef __UINT32_TYPE__ uint32_t;
@@ -26,8 +28,5 @@ typedef unsigned int uint;
 
 #define INT_MAX (__INT_MAX__)
 
-typedef int bool;
 typedef int ssize_t;
 
-#define false (0)
-#define true (1)
