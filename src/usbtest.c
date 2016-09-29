@@ -71,14 +71,7 @@ EFIAPI efi_status MyDriverStop(
     return EFI_SUCCESS;
 }
 
-static efi_driver_binding_protocol MyDriver = {
-    .Supported = MyDriverSupported,
-    .Start = MyDriverStart,
-    .Stop = MyDriverStop,
-    .Version = 32,
-    .ImageHandle = NULL,
-    .DriverBindingHandle = NULL,
-};
+static efi_driver_binding_protocol MyDriver;
 
 void InstallMyDriver(efi_handle img, efi_system_table* sys) {
     efi_boot_services* bs = sys->BootServices;
@@ -86,6 +79,10 @@ void InstallMyDriver(efi_handle img, efi_system_table* sys) {
     size_t count, i;
     efi_status r;
 
+    MyDriver.Supported = MyDriverSupported;
+    MyDriver.Start = MyDriverStart;
+    MyDriver.Stop = MyDriverStop;
+    MyDriver.Version = 32;
     MyDriver.ImageHandle = img;
     MyDriver.DriverBindingHandle = img;
     r = bs->InstallProtocolInterface(&img, &DriverBindingProtocol,
@@ -126,7 +123,7 @@ void RemoveMyDriver(efi_handle img, efi_system_table* sys) {
         printf("UninstallProtocol failed %lx\n", r);
 }
 
-efi_status efi_main(efi_handle img, efi_system_table* sys) {
+EFIAPI efi_status efi_main(efi_handle img, efi_system_table* sys) {
     InitGoodies(img, sys);
 
     printf("Hello, EFI World\n");

@@ -7,27 +7,20 @@ ARCH		:= x86_64
 EFI_TOOLCHAIN	:=
 EFI_CC		:= $(EFI_TOOLCHAIN)gcc
 EFI_LD		:= $(EFI_TOOLCHAIN)ld
+EFI_READELF	:= $(EFI_TOOLCHAIN)readelf
 EFI_OBJCOPY	:= $(EFI_TOOLCHAIN)objcopy
 EFI_AR		:= $(EFI_TOOLCHAIN)ar
 
-EFI_PATH	:= third_party/gnu-efi
-EFI_LIB_PATHS	:= $(EFI_PATH)/$(ARCH)/gnuefi out
+EFI_LINKSCRIPT	:= build/efi-x86-64.lds
 
-EFI_CRT0	:= $(EFI_PATH)/$(ARCH)/gnuefi/crt0-efi-$(ARCH).o
-EFI_LINKSCRIPT	:= $(EFI_PATH)/gnuefi/elf_$(ARCH)_efi.lds
-
-EFI_CFLAGS	:= -fpic -fshort-wchar -fno-stack-protector -mno-red-zone
-EFI_CFLAGS	+= -Wall
-EFI_CFLAGS	+= -std=c99
+EFI_CFLAGS	:= -fPIE -fshort-wchar -fno-stack-protector -mno-red-zone
+EFI_CFLAGS	+= -Wall -std=c99
 EFI_CFLAGS	+= -ffreestanding -nostdinc -Iinclude -Isrc -Ithird_party/lk/include
-EFI_CFLAGS	+= $(patsubst %,-I%,$(EFI_INC_PATHS))
-EFI_CFLAGS	+= -ggdb
 
-EFI_LDFLAGS	:= -nostdlib -znocombreloc -T $(EFI_LINKSCRIPT)
-EFI_LDFLAGS	+= -shared -Bsymbolic
-EFI_LDFLAGS	+= $(patsubst %,-L%,$(EFI_LIB_PATHS))
+EFI_LDFLAGS	:= -nostdlib -T $(EFI_LINKSCRIPT) -pie
+EFI_LDFLAGS	+= -Lout
 
-EFI_LIBS	:= -lutils -lgnuefi
+EFI_LIBS	:= -lutils
 
 what_to_build::	all
 
@@ -90,17 +83,14 @@ ALL += out/disk.img
 
 -include $(DEPS)
 
-# ensure gnu-efi gets built
-$(EFI_CRT0):
-	@echo building: gnu-efi
-	$(QUIET)$(MAKE) -C $(EFI_PATH)
-
 QEMU_OPTS := -cpu qemu64
 QEMU_OPTS += -bios third_party/ovmf/OVMF.fd
 QEMU_OPTS += -drive file=out/disk.img,format=raw,if=ide
 QEMU_OPTS += -serial stdio
 QEMU_OPTS += -m 256M
-QEMU_OPTS += -usbdevice host:0b95:772b
+ifneq ($(USBDEV),)
+    QEMU_OPTS += -usbdevice host:$(USBDEV)
+endif
 
 qemu-e1000: QEMU_OPTS += -netdev type=tap,ifname=qemu,script=no,id=net0 -net nic,model=e1000,netdev=net0
 qemu-e1000: all
@@ -121,4 +111,3 @@ clean::
 	rm -rf out
 
 all-clean: clean
-	make -C third_party/gnu-efi clean

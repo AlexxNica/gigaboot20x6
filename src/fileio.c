@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <utils.h>
 
-efi_status efi_main(efi_handle img, efi_system_table* sys) {
+EFIAPI efi_status efi_main(efi_handle img, efi_system_table* sys) {
     efi_loaded_image_protocol* loaded;
     efi_status r;
 

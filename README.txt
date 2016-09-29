@@ -5,22 +5,14 @@ This project contains some experiments in software that runs on UEFI
 firmware for the purpose of exploring UEFI development and bootloader
 development.
 
+Since UEFI images are in PE32+ file format, we require that our binaries be
+position independent executables with no relocations. For the most part this
+does not require any extra effort on x86-64, but it does mean that you cannot
+statically initialize any variables that hold an address. (These addresses may
+be assigned at runtime however.)
 
 External Software Included
 --------------------------
-
-Local Path:   third_party/gnu-efi/...
-Description:  headers and tooling to build UEFI binaries with gcc, etc
-Project:      https://sourceforge.net/projects/gnu-efi/
-Source:       git://git.code.sf.net/p/gnu-efi/code
-Version:      6605c16fc8b1fd3b2085364902d1fa73aa7fad76 (post-3.0.4)
-License:      BSD-ish, see gnu-efi/README.*
-
-Local Path:   third_party/edk2/...
-Description:  ax88772b UEFI driver, as well as headers for UEFI from Tianocore EDK II
-Project:      http://www.tianocore.org/edk2/
-Source:       https://github.com/tianocore/edk2
-License:      BSD-ish, see headers
 
 Local Path:   third_party/ovmf/...
 Description:  UEFI Firmware Suitable for use in Qemu

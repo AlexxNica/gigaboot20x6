@@ -75,7 +75,7 @@ static void dump_memmap(efi_system_table* systab) {
 
 #include <utils.h>
 
-efi_status efi_main(efi_handle img, efi_system_table* sys) {
+EFIAPI efi_status efi_main(efi_handle img, efi_system_table* sys) {
     InitGoodies(img, sys);
     dump_memmap(sys);
     WaitAnyKey();

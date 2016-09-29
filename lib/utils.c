@@ -12,47 +12,6 @@
 #include <printf.h>
 #include <utils.h>
 
-#define ERR_ENTRY(x) { #x, L"" #x }
-typedef struct {
-    const char* str;
-    const char16_t* w_str;
-} err_entry_t;
-
-err_entry_t efi_error_labels[] = {
-    ERR_ENTRY(EFI_SUCCESS),
-    ERR_ENTRY(EFI_LOAD_ERROR),
-    ERR_ENTRY(EFI_INVALID_PARAMETER),
-    ERR_ENTRY(EFI_UNSUPPORTED),
-    ERR_ENTRY(EFI_BAD_BUFFER_SIZE),
-    ERR_ENTRY(EFI_BUFFER_TOO_SMALL),
-    ERR_ENTRY(EFI_NOT_READY),
-    ERR_ENTRY(EFI_DEVICE_ERROR),
-    ERR_ENTRY(EFI_WRITE_PROTECTED),
-    ERR_ENTRY(EFI_OUT_OF_RESOURCES),
-    ERR_ENTRY(EFI_VOLUME_CORRUPTED),
-    ERR_ENTRY(EFI_VOLUME_FULL),
-    ERR_ENTRY(EFI_NO_MEDIA),
-    ERR_ENTRY(EFI_MEDIA_CHANGED),
-    ERR_ENTRY(EFI_NOT_FOUND),
-    ERR_ENTRY(EFI_ACCESS_DENIED),
-    ERR_ENTRY(EFI_NO_RESPONSE),
-    ERR_ENTRY(EFI_NO_MAPPING),
-    ERR_ENTRY(EFI_TIMEOUT),
-    ERR_ENTRY(EFI_NOT_STARTED),
-    ERR_ENTRY(EFI_ALREADY_STARTED),
-    ERR_ENTRY(EFI_ABORTED),
-    ERR_ENTRY(EFI_ICMP_ERROR),
-    ERR_ENTRY(EFI_TFTP_ERROR),
-    ERR_ENTRY(EFI_PROTOCOL_ERROR),
-    ERR_ENTRY(EFI_INCOMPATIBLE_VERSION),
-    ERR_ENTRY(EFI_SECURITY_VIOLATION),
-    ERR_ENTRY(EFI_CRC_ERROR),
-    ERR_ENTRY(EFI_END_OF_MEDIA),
-    ERR_ENTRY(EFI_END_OF_FILE),
-    ERR_ENTRY(EFI_INVALID_LANGUAGE),
-    ERR_ENTRY(EFI_COMPROMISED_DATA),
-};
-
 efi_system_table* gSys;
 efi_handle gImg;
 efi_boot_services* gBS;
@@ -127,9 +86,46 @@ efi_status CloseProtocol(efi_handle h, efi_guid* guid) {
 
 const char *efi_strerror(efi_status status)
 {
-    size_t i = (~EFI_ERROR_MASK & status);
-    if (i < sizeof(efi_error_labels)/sizeof(efi_error_labels[0])) {
-        return efi_error_labels[i].str;
+    switch (status) {
+#define ERR_ENTRY(x) \
+    case x: {        \
+        return #x;   \
+    }
+        ERR_ENTRY(EFI_SUCCESS);
+        ERR_ENTRY(EFI_LOAD_ERROR);
+        ERR_ENTRY(EFI_INVALID_PARAMETER);
+        ERR_ENTRY(EFI_UNSUPPORTED);
+        ERR_ENTRY(EFI_BAD_BUFFER_SIZE);
+        ERR_ENTRY(EFI_BUFFER_TOO_SMALL);
+        ERR_ENTRY(EFI_NOT_READY);
+        ERR_ENTRY(EFI_DEVICE_ERROR);
+        ERR_ENTRY(EFI_WRITE_PROTECTED);
+        ERR_ENTRY(EFI_OUT_OF_RESOURCES);
+        ERR_ENTRY(EFI_VOLUME_CORRUPTED);
+        ERR_ENTRY(EFI_VOLUME_FULL);
+        ERR_ENTRY(EFI_NO_MEDIA);
+        ERR_ENTRY(EFI_MEDIA_CHANGED);
+        ERR_ENTRY(EFI_NOT_FOUND);
+        ERR_ENTRY(EFI_ACCESS_DENIED);
+        ERR_ENTRY(EFI_NO_RESPONSE);
+        ERR_ENTRY(EFI_NO_MAPPING);
+        ERR_ENTRY(EFI_TIMEOUT);
+        ERR_ENTRY(EFI_NOT_STARTED);
+        ERR_ENTRY(EFI_ALREADY_STARTED);
+        ERR_ENTRY(EFI_ABORTED);
+        ERR_ENTRY(EFI_ICMP_ERROR);
+        ERR_ENTRY(EFI_TFTP_ERROR);
+        ERR_ENTRY(EFI_PROTOCOL_ERROR);
+        ERR_ENTRY(EFI_INCOMPATIBLE_VERSION);
+        ERR_ENTRY(EFI_SECURITY_VIOLATION);
+        ERR_ENTRY(EFI_CRC_ERROR);
+        ERR_ENTRY(EFI_END_OF_MEDIA);
+        ERR_ENTRY(EFI_END_OF_FILE);
+        ERR_ENTRY(EFI_INVALID_LANGUAGE);
+        ERR_ENTRY(EFI_COMPROMISED_DATA);
+        ERR_ENTRY(EFI_IP_ADDRESS_CONFLICT);
+        ERR_ENTRY(EFI_HTTP_ERROR);
+#undef ERR_ENTRY
     }
 
     return "<Unknown error>";
@@ -137,9 +133,46 @@ const char *efi_strerror(efi_status status)
 
 const char16_t* efi_wstrerror(efi_status status)
 {
-    size_t i = (~EFI_ERROR_MASK & status);
-    if (i < sizeof(efi_error_labels)/sizeof(efi_error_labels[0])) {
-        return efi_error_labels[i].w_str;
+    switch (status) {
+#define ERR_ENTRY(x)     \
+    case x: {            \
+        return L"" #x;   \
+    }
+        ERR_ENTRY(EFI_SUCCESS);
+        ERR_ENTRY(EFI_LOAD_ERROR);
+        ERR_ENTRY(EFI_INVALID_PARAMETER);
+        ERR_ENTRY(EFI_UNSUPPORTED);
+        ERR_ENTRY(EFI_BAD_BUFFER_SIZE);
+        ERR_ENTRY(EFI_BUFFER_TOO_SMALL);
+        ERR_ENTRY(EFI_NOT_READY);
+        ERR_ENTRY(EFI_DEVICE_ERROR);
+        ERR_ENTRY(EFI_WRITE_PROTECTED);
+        ERR_ENTRY(EFI_OUT_OF_RESOURCES);
+        ERR_ENTRY(EFI_VOLUME_CORRUPTED);
+        ERR_ENTRY(EFI_VOLUME_FULL);
+        ERR_ENTRY(EFI_NO_MEDIA);
+        ERR_ENTRY(EFI_MEDIA_CHANGED);
+        ERR_ENTRY(EFI_NOT_FOUND);
+        ERR_ENTRY(EFI_ACCESS_DENIED);
+        ERR_ENTRY(EFI_NO_RESPONSE);
+        ERR_ENTRY(EFI_NO_MAPPING);
+        ERR_ENTRY(EFI_TIMEOUT);
+        ERR_ENTRY(EFI_NOT_STARTED);
+        ERR_ENTRY(EFI_ALREADY_STARTED);
+        ERR_ENTRY(EFI_ABORTED);
+        ERR_ENTRY(EFI_ICMP_ERROR);
+        ERR_ENTRY(EFI_TFTP_ERROR);
+        ERR_ENTRY(EFI_PROTOCOL_ERROR);
+        ERR_ENTRY(EFI_INCOMPATIBLE_VERSION);
+        ERR_ENTRY(EFI_SECURITY_VIOLATION);
+        ERR_ENTRY(EFI_CRC_ERROR);
+        ERR_ENTRY(EFI_END_OF_MEDIA);
+        ERR_ENTRY(EFI_END_OF_FILE);
+        ERR_ENTRY(EFI_INVALID_LANGUAGE);
+        ERR_ENTRY(EFI_COMPROMISED_DATA);
+        ERR_ENTRY(EFI_IP_ADDRESS_CONFLICT);
+        ERR_ENTRY(EFI_HTTP_ERROR);
+#undef ERR_ENTRY
     }
 
     return L"<Unknown error>";

@@ -4,7 +4,7 @@
 
 #include <efi/types.h>
 
-efi_status efi_main(efi_handle img, efi_system_table* sys) {
+EFIAPI efi_status efi_main(efi_handle img, efi_system_table* sys) {
     efi_simple_text_output_protocol* ConOut = sys->ConOut;
     ConOut->OutputString(ConOut, L"Hello, EFI World!\r\n");
     return EFI_SUCCESS;

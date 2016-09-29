@@ -40,14 +40,17 @@ uint32_t find_acpi_root(efi_handle img, efi_system_table* sys) {
 #define E820_NVS 4
 #define E820_UNUSABLE 5
 
-const char* e820name[] = {
-    "IGNORE",
-    "RAM",
-    "RESERVED",
-    "ACPI",
-    "NVS",
-    "UNUSABLE",
-};
+static inline const char* e820name(int e820) {
+    switch (e820) {
+    case E820_IGNORE:   return "IGNORE";
+    case E820_RAM:      return "RAM";
+    case E820_RESERVED: return "RESERVED";
+    case E820_ACPI:     return "ACPI";
+    case E820_NVS:      return "NVS";
+    case E820_UNUSABLE: return "UNUSABLE";
+    }
+    return "";
+}
 
 struct e820entry {
     uint64_t addr;
@@ -341,7 +344,7 @@ int boot_kernel(efi_handle img, efi_system_table* sys,
 
     for (i = 0; i < n; i++) {
         struct e820entry* e = e820table + i;
-        printf("%016lx %016lx %s\n", e->addr, e->size, e820name[e->type]);
+        printf("%016lx %016lx %s\n", e->addr, e->size, e820name(e->type));
     }
 
     r = sys->BootServices->ExitBootServices(img, key);
