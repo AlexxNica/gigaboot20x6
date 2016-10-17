@@ -1,3 +1,9 @@
+THIS PROJECT IS NO LONGER MAINTAINED.
+The gigaboot20x6 project is now hosted at
+https://fuchsia.googlesource.com/magenta in the bootloader/ directory.
+
+
+
 What is This?
 -------------
 
